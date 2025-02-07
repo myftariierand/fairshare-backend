@@ -14,14 +14,15 @@ model User {
   password            String
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
-  groups              Group[]            @relation("GroupCreatedBy")
-  memeberships        GroupMember[]
-  transactions        Transaction[]
-  transactionSplits   TransactionSplit[]
-  friendshipsSender   Friendships[]      @relation("FriendshipSender")
   friendshipsReceiver Friendships[]      @relation("FriendshipReceiver")
-  invitationSender    GroupInvitation[]  @relation("GroupInvitationSender")
+  friendshipsSender   Friendships[]      @relation("FriendshipSender")
+  groups              Group[]            @relation("GroupCreatedBy")
   invitationReceiver  GroupInvitation[]  @relation("GroupInvitationReceiver")
+  invitationSender    GroupInvitation[]  @relation("GroupInvitationSender")
+  memeberships        GroupMember[]
+  createdTransactions Transaction[]      @relation("CreatedBy")
+  paidTransactions    Transaction[]      @relation("PaidBy")
+  transactionSplits   TransactionSplit[]
 }
 
 model Group {
@@ -29,20 +30,20 @@ model Group {
   name         String
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
-  createdBy    User              @relation("GroupCreatedBy", fields: [createdById], references: [id])
   createdById  String
+  createdBy    User              @relation("GroupCreatedBy", fields: [createdById], references: [id])
+  invitations  GroupInvitation[]
   members      GroupMember[]
   transactions Transaction[]
-  invitations  GroupInvitation[]
 }
 
 model GroupMember {
   id       String   @id @default(uuid())
   joinedAt DateTime @default(now())
-  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
   groupId  String
-  user     User     @relation(fields: [userId], references: [id])
   userId   String
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
 
   @@unique([groupId, userId])
 }
@@ -52,12 +53,12 @@ model GroupInvitation {
   status     InvitationStatus @default(PENDING)
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
-  group      Group            @relation(fields: [groupId], references: [id])
   groupId    String
-  sender     User             @relation("GroupInvitationSender", fields: [senderId], references: [id])
   senderId   String
-  receiver   User             @relation("GroupInvitationReceiver", fields: [receiverId], references: [id])
   receiverId String
+  group      Group            @relation(fields: [groupId], references: [id])
+  receiver   User             @relation("GroupInvitationReceiver", fields: [receiverId], references: [id])
+  sender     User             @relation("GroupInvitationSender", fields: [senderId], references: [id])
 
   @@unique([groupId, receiverId])
 }
@@ -68,20 +69,22 @@ model Transaction {
   description String
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
-  group       Group              @relation(fields: [groupId], references: [id])
   groupId     String
-  createdBy   User               @relation(fields: [createdById], references: [id])
+  paidById    String
   createdById String
+  createdBy   User               @relation("CreatedBy", fields: [createdById], references: [id])
+  group       Group              @relation(fields: [groupId], references: [id])
+  paidBy      User               @relation("PaidBy", fields: [paidById], references: [id])
   splits      TransactionSplit[]
 }
 
 model TransactionSplit {
   id            String      @id @default(uuid())
   amount        Float
-  user          User        @relation(fields: [userId], references: [id])
   userId        String
-  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id])
 
   @@unique([userId, transactionId])
 }
@@ -91,10 +94,10 @@ model Friendships {
   status     FriendshipStatus @default(PENDING)
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
-  sender     User             @relation("FriendshipSender", fields: [senderId], references: [id])
   senderId   String
-  receiver   User             @relation("FriendshipReceiver", fields: [receiverId], references: [id])
   receiverId String
+  receiver   User             @relation("FriendshipReceiver", fields: [receiverId], references: [id])
+  sender     User             @relation("FriendshipSender", fields: [senderId], references: [id])
 
   @@unique([senderId, receiverId])
 }
