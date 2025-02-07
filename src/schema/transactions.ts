@@ -6,6 +6,7 @@ const CreateTransactionSchema = z
     groupId: z.string().uuid(),
     amount: z.number().positive(),
     description: z.string().min(4),
+    paidBy: z.string().uuid(),
     splits: z
       .array(
         z.object({
@@ -89,4 +90,12 @@ const GetTransactionParamsSchema = z.object({
 
 export class GetTransactionParamsDto extends createZodDto(
   GetTransactionParamsSchema,
+) {}
+
+const GetTransactionByIdParamsSchema = z.object({
+  id: z.string().uuid(),
+});
+
+export class GetTransactionByIdParamsDto extends createZodDto(
+  GetTransactionByIdParamsSchema,
 ) {}
