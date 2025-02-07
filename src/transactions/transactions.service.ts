@@ -5,15 +5,80 @@ import {
 } from '@nestjs/common';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
+// import { Prisma } from '@prisma/client';
 import { DatabaseService } from 'src/database/database.service';
 
 @Injectable()
 export class TransactionsService {
   constructor(private prisma: DatabaseService) {}
 
+  // calculateBalances(
+  //   transactions: Prisma.TransactionGetPayload<{ include: { splits: true } }>[],
+  // ) {
+  //   const balances: Record<string, number> = {};
+
+  //   transactions.forEach((transaction) => {
+  //     const { paidById, amount, splits } = transaction;
+
+  //     if (!balances[paidById]) balances[paidById] = 0;
+
+  //     balances[paidById] += amount;
+
+  //     splits.forEach((split) => {
+  //       if (!balances[split.userId]) balances[split.userId] = 0;
+
+  //       balances[split.userId] -= split.amount;
+  //     });
+  //   });
+
+  //   return balances;
+  // }
+
   async findTransactions(userId: string, groupId: string) {
-    return this.prisma.transaction.findMany({
+    const response = await this.prisma.transaction.findMany({
       where: { groupId, group: { members: { some: { userId } } } },
+      orderBy: { createdAt: 'desc' },
+      include: { splits: true, paidBy: true },
+    });
+
+    return response.map(
+      ({ id, description, createdAt, amount, paidBy, splits, paidById }) => {
+        const userSplit = splits.find((split) => split.userId === userId);
+
+        const balance =
+          paidById === userId
+            ? splits.reduce(
+                (sum, split) =>
+                  sum + (split.userId !== userId ? split.amount : 0),
+                0,
+              )
+            : -(userSplit?.amount ?? 0);
+
+        return {
+          id,
+          description,
+          paidBy: paidBy.id === userId ? 'You' : paidBy.name,
+          createdAt,
+          balance,
+          amount,
+        };
+      },
+    );
+  }
+
+  async findTransactionById(userId: string, id: string) {
+    return this.prisma.transaction.findUnique({
+      where: {
+        id,
+        splits: { some: { userId } },
+      },
+      include: {
+        paidBy: true,
+        createdBy: true,
+        splits: {
+          include: { user: true },
+        },
+      },
     });
   }
 
@@ -22,6 +87,7 @@ export class TransactionsService {
     groupId: string,
     amount: number,
     description: string,
+    paidBy: string,
     splits: { userId: string; amount: number }[],
   ) {
     const foundGroup = await this.prisma.group.findUnique({
@@ -45,6 +111,11 @@ export class TransactionsService {
         createdBy: {
           connect: {
             id: userId,
+          },
+        },
+        paidBy: {
+          connect: {
+            id: paidBy,
           },
         },
         group: {
