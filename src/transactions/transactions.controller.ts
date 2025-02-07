@@ -18,6 +18,7 @@ import {
   UpdateTransactionParamsDto,
   DeleteTransactionParamsDto,
   GetTransactionParamsDto,
+  GetTransactionByIdParamsDto,
 } from 'src/schema/transactions';
 
 @Controller('transactions')
@@ -32,6 +33,14 @@ export class TransactionsController {
     return this.transactionsService.findTransactions(userId, groupId);
   }
 
+  @Get('single/:id')
+  getTransactionById(
+    @UserId() userId,
+    @Param() { id }: GetTransactionByIdParamsDto,
+  ) {
+    return this.transactionsService.findTransactionById(userId, id);
+  }
+
   @Post()
   createTransaction(
     @UserId() userId,
@@ -42,6 +51,7 @@ export class TransactionsController {
       createTransactionDto.groupId,
       createTransactionDto.amount,
       createTransactionDto.description,
+      createTransactionDto.paidBy,
       createTransactionDto.splits,
     );
   }
