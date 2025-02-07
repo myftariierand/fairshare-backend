@@ -31,7 +31,7 @@ export class GroupsService {
   }
 
   async findGroupById(userId: string, groupId: string) {
-    return await this.prisma.group.findUnique({
+    const response = await this.prisma.group.findUnique({
       where: {
         id: groupId,
         members: { some: { userId } },
@@ -41,13 +41,22 @@ export class GroupsService {
           include: { user: true },
         },
         createdBy: true,
-        transactions: {
-          include: {
-            createdBy: true,
-          },
-        },
       },
     });
+
+    const transformedResponse = {
+      ...response,
+      members: response?.members.map(
+        ({ joinedAt, user: { id, email, name } }) => ({
+          id,
+          joinedAt,
+          email,
+          name,
+        }),
+      ),
+    };
+
+    return transformedResponse;
   }
 
   async create(
