@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 
 import { DatabaseModule } from 'src/database/database.module';
+import { SseModule } from 'src/sse/sse.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { UsersModule } from 'src/users/users.module';
 import { GroupsModule } from 'src/groups/groups.module';
@@ -16,6 +17,7 @@ import { AuthGuard } from 'src/auth/auth.guard';
   imports: [
     ConfigModule.forRoot(),
     DatabaseModule,
+    SseModule,
     AuthModule,
     UsersModule,
     GroupsModule,
