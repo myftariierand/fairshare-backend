@@ -54,6 +54,7 @@ export class AuthService {
       httpOnly: true,
       secure: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'none',
     });
 
     return { accessToken };
@@ -99,6 +100,7 @@ export class AuthService {
         httpOnly: true,
         secure: true,
         maxAge: 7 * 24 * 60 * 60 * 1000,
+        sameSite: 'none',
       });
 
       return { accessToken };
