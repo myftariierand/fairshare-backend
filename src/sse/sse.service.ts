@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Observable, Subject } from 'rxjs';
 
+import type { SseEventType } from 'src/types/sse';
+
 @Injectable()
 export class SseService {
   private static userStreams: Record<string, Subject<MessageEvent>> = {};
@@ -12,13 +14,15 @@ export class SseService {
     return SseService.userStreams[userId].asObservable();
   }
 
-  emit(receiverId: string, type: string, message: string) {
-    if (SseService.userStreams[receiverId]) {
-      SseService.userStreams[receiverId].next(
-        new MessageEvent('event', {
-          data: { type, message },
-        }),
-      );
-    }
+  emit(receivers: string[], type: SseEventType, message: string) {
+    receivers.forEach((receiver) => {
+      if (SseService.userStreams[receiver]) {
+        SseService.userStreams[receiver].next(
+          new MessageEvent('event', {
+            data: { type, message },
+          }),
+        );
+      }
+    });
   }
 }

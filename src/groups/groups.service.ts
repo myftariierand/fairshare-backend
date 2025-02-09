@@ -3,15 +3,21 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
+import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
 
-import { Prisma } from '@prisma/client';
+import { SseEventType } from 'src/types/sse';
 
 @Injectable()
 export class GroupsService {
-  constructor(private prisma: DatabaseService) {}
+  constructor(
+    private sse: SseService,
+    private prisma: DatabaseService,
+  ) {}
 
   async findMany(userId: string) {
     return await this.prisma.group.findMany({
@@ -95,23 +101,31 @@ export class GroupsService {
     updateGroupDto: Prisma.GroupUpdateInput,
   ) {
     try {
-      return await this.prisma.group.update({
+      const response = await this.prisma.group.update({
         where: {
           id: groupId,
-          AND: [{ createdById: userId }],
+          AND: [{ members: { some: { userId } } }],
         },
         data: updateGroupDto,
+        include: { members: { include: { user: true } } },
       });
+
+      const memebersIds = response.members
+        .map(({ userId }) => userId)
+        .filter((id) => id !== userId);
+      const user = response.members.find((member) => member.userId === userId);
+
+      this.sse.emit(
+        memebersIds,
+        SseEventType.GROUP_UDPATED,
+        `${user?.user.name} updated group "${response.name}"`,
+      );
+
+      return response;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          throw new HttpException(
-            {
-              status: HttpStatus.NOT_FOUND,
-              error: error.meta?.cause,
-            },
-            HttpStatus.NOT_FOUND,
-          );
+          throw new NotFoundException(error.meta?.cause);
         }
       }
     }
@@ -119,12 +133,23 @@ export class GroupsService {
 
   async delete(userId: string, groupId: string) {
     try {
-      await this.prisma.group.delete({
+      const response = await this.prisma.group.delete({
         where: {
           id: groupId,
           AND: [{ createdById: userId }],
         },
+        include: { createdBy: true, members: { where: { NOT: { userId } } } },
       });
+
+      const membersIds = response.members.map((member) => member.userId);
+
+      this.sse.emit(
+        membersIds,
+        SseEventType.GROUP_DELETED,
+        `${response.createdBy.name} deleted "${response.name}" grup`,
+      );
+
+      return response;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         throw new HttpException(
@@ -154,13 +179,25 @@ export class GroupsService {
 
   async invite(userId: string, groupId: string, receiverId: string) {
     try {
-      return await this.prisma.groupInvitation.create({
+      const response = await this.prisma.groupInvitation.create({
         data: {
           groupId: groupId,
           senderId: userId,
           receiverId: receiverId,
         },
+        include: {
+          group: true,
+          sender: true,
+        },
       });
+
+      this.sse.emit(
+        [receiverId],
+        SseEventType.GROUP_INVITE_RECEIVED,
+        `${response.sender.name} invites you to join ${response.group.name}`,
+      );
+
+      return response;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -176,7 +213,7 @@ export class GroupsService {
     invitationId: string,
   ) {
     try {
-      await this.prisma.group.update({
+      const group = await this.prisma.group.update({
         where: {
           id: groupId,
         },
@@ -196,15 +233,41 @@ export class GroupsService {
             },
           },
         },
+        include: {
+          members: true,
+        },
       });
-      await this.prisma.groupInvitation.update({
+
+      const invitation = await this.prisma.groupInvitation.update({
         where: {
           id: invitationId,
         },
         data: {
           status: 'ACCEPTED',
         },
+        include: { receiver: true },
       });
+
+      const membersIds = group.members
+        .filter(
+          (member) =>
+            member.userId !== invitation.senderId &&
+            member.userId !== invitation.receiverId,
+        )
+        .map(({ userId }) => userId);
+
+      this.sse.emit(
+        [invitation.senderId],
+        SseEventType.GROUP_INVITE_ACCEPTED,
+        `${invitation.receiver.name} accepted invitation to ${group.name}`,
+      );
+
+      this.sse.emit(
+        membersIds,
+        SseEventType.GROUP_JOINED,
+        `${invitation.receiver.name} joined ${group.name}`,
+      );
+
       return { success: true };
     } catch (error) {
       console.log(error);
@@ -213,12 +276,21 @@ export class GroupsService {
 
   async rejectInvitation(invitationId: string) {
     try {
-      return await this.prisma.groupInvitation.delete({
+      const invite = await this.prisma.groupInvitation.delete({
         where: {
           id: invitationId,
           status: 'PENDING',
         },
+        include: { receiver: true, group: true },
       });
+
+      this.sse.emit(
+        [invite.senderId],
+        SseEventType.GROUP_INVITE_ACCEPTED,
+        `${invite.receiver.name} rejected invitation to ${invite.group.name}`,
+      );
+
+      return invite;
     } catch (error) {
       console.log(error);
     }

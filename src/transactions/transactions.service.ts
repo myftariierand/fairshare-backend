@@ -6,11 +6,17 @@ import {
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 // import { Prisma } from '@prisma/client';
+import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
+
+import { SseEventType } from 'src/types/sse';
 
 @Injectable()
 export class TransactionsService {
-  constructor(private prisma: DatabaseService) {}
+  constructor(
+    private sse: SseService,
+    private prisma: DatabaseService,
+  ) {}
 
   // calculateBalances(
   //   transactions: Prisma.TransactionGetPayload<{ include: { splits: true } }>[],
@@ -92,7 +98,7 @@ export class TransactionsService {
   ) {
     const foundGroup = await this.prisma.group.findUnique({
       where: { id: groupId },
-      include: { members: true },
+      include: { members: { include: { user: true } } },
     });
     if (!foundGroup) throw new NotFoundException('Group not found');
 
@@ -104,7 +110,7 @@ export class TransactionsService {
     if (groupMemebersIds.length !== userIds.length)
       throw new ForbiddenException('All users should be members of the group');
 
-    return this.prisma.transaction.create({
+    const transaction = await this.prisma.transaction.create({
       data: {
         amount,
         description,
@@ -128,6 +134,18 @@ export class TransactionsService {
         },
       },
     });
+
+    const member = foundGroup.members.find(
+      (member) => member.userId === userId,
+    );
+    const receiversIds = groupMemebersIds.filter((id) => id !== userId);
+    this.sse.emit(
+      receiversIds,
+      SseEventType.TRANSACTION_ADDED,
+      `${member?.user.name} added ${transaction.description}`,
+    );
+
+    return transaction;
   }
 
   async updateTransaction(
@@ -140,7 +158,7 @@ export class TransactionsService {
   ) {
     const foundGroup = await this.prisma.group.findUnique({
       where: { id: groupId },
-      include: { members: true },
+      include: { members: { include: { user: true } } },
     });
     if (!foundGroup) throw new NotFoundException('Group not found');
 
@@ -157,7 +175,7 @@ export class TransactionsService {
       data: { amount },
     }));
 
-    return this.prisma.transaction.update({
+    const transaction = await this.prisma.transaction.update({
       where: { id },
       data: {
         amount,
@@ -167,13 +185,40 @@ export class TransactionsService {
         },
       },
     });
+
+    const receivers = groupMemebersIds.filter((id) => id !== userId);
+    const updater = foundGroup.members.find(
+      (member) => member.userId === userId,
+    );
+
+    this.sse.emit(
+      receivers,
+      SseEventType.TRANSACTION_UPDATED,
+      `${updater?.user.name} updated ${transaction.description}`,
+    );
+
+    return transaction;
   }
 
   async deleteTransaction(userId: string, id: string) {
     try {
-      return await this.prisma.transaction.delete({
+      const transaction = await this.prisma.transaction.delete({
         where: { id, splits: { some: { userId } } },
+        include: { splits: { include: { user: true } } },
       });
+
+      const receivers = transaction.splits
+        .filter((split) => split.userId !== userId)
+        .map((split) => split.userId);
+      const user = transaction.splits.find((split) => split.userId === userId);
+
+      this.sse.emit(
+        receivers,
+        SseEventType.TRANSACTION_DELETED,
+        `${user?.user.name} deleted ${transaction.description}`,
+      );
+
+      return transaction;
     } catch (error) {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {

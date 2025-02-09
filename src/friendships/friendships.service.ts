@@ -1,15 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 
 import { Friendships } from '@prisma/client';
 
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
 
+import { SseEventType } from 'src/types/sse';
+
 @Injectable()
 export class FriendshipsService {
   constructor(
+    private sse: SseService,
     private prisma: DatabaseService,
-    private sseService: SseService,
   ) {}
 
   async findFriends(userId: string) {
@@ -100,9 +102,9 @@ export class FriendshipsService {
         },
       });
 
-      this.sseService.emit(
-        receiverId,
-        'new_friend_request',
+      this.sse.emit(
+        [receiverId],
+        SseEventType.FRIEND_REQUEST_RECEIVED,
         `${response.sender.name} sent you a friend request`,
       );
 
@@ -113,26 +115,58 @@ export class FriendshipsService {
   }
 
   async acceptRequest(userId: string, id: string) {
-    return this.prisma.friendships.update({
-      where: {
-        id,
-        receiverId: userId,
-        status: 'PENDING',
-      },
-      data: {
-        status: 'ACCEPTED',
-      },
-    });
+    try {
+      const response = await this.prisma.friendships.update({
+        where: {
+          id,
+          receiverId: userId,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'ACCEPTED',
+        },
+        include: {
+          receiver: true,
+        },
+      });
+
+      this.sse.emit(
+        [response.senderId],
+        SseEventType.FRIEND_REQUEST_ACCEPTED,
+        `${response.receiver.name} accepted your friend request`,
+      );
+
+      return response;
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException();
+    }
   }
 
   async rejectRequest(userId: string, id: string) {
-    return this.prisma.friendships.delete({
-      where: {
-        id,
-        receiverId: userId,
-        status: 'PENDING',
-      },
-    });
+    try {
+      const response = await this.prisma.friendships.delete({
+        where: {
+          id,
+          receiverId: userId,
+          status: 'PENDING',
+        },
+        include: {
+          receiver: true,
+        },
+      });
+
+      this.sse.emit(
+        [response.senderId],
+        SseEventType.FRIEND_REQUEST_REJECTED,
+        `${response.receiver.name} rejected your friend request`,
+      );
+
+      return response;
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException();
+    }
   }
 
   async cancelRequest(userId: string, id: string) {
