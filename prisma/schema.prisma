@@ -67,6 +67,7 @@ model Transaction {
   id          String             @id @default(uuid())
   amount      Float
   description String
+  type        TransactionType    @default(EXPENSE)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   groupId     String
@@ -112,4 +113,9 @@ enum InvitationStatus {
   PENDING
   ACCEPTED
   REJECTED
+}
+
+enum TransactionType {
+  EXPENSE
+  SETTLEMENT
 }
