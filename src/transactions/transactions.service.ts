@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
-// import { Prisma } from '@prisma/client';
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
 
@@ -18,28 +17,6 @@ export class TransactionsService {
     private prisma: DatabaseService,
   ) {}
 
-  // calculateBalances(
-  //   transactions: Prisma.TransactionGetPayload<{ include: { splits: true } }>[],
-  // ) {
-  //   const balances: Record<string, number> = {};
-
-  //   transactions.forEach((transaction) => {
-  //     const { paidById, amount, splits } = transaction;
-
-  //     if (!balances[paidById]) balances[paidById] = 0;
-
-  //     balances[paidById] += amount;
-
-  //     splits.forEach((split) => {
-  //       if (!balances[split.userId]) balances[split.userId] = 0;
-
-  //       balances[split.userId] -= split.amount;
-  //     });
-  //   });
-
-  //   return balances;
-  // }
-
   async findTransactions(userId: string, groupId: string) {
     const response = await this.prisma.transaction.findMany({
       where: { groupId, group: { members: { some: { userId } } } },
@@ -48,7 +25,16 @@ export class TransactionsService {
     });
 
     return response.map(
-      ({ id, description, createdAt, amount, paidBy, splits, paidById }) => {
+      ({
+        id,
+        description,
+        createdAt,
+        amount,
+        paidBy,
+        splits,
+        paidById,
+        type,
+      }) => {
         const userSplit = splits.find((split) => split.userId === userId);
 
         const balance =
@@ -67,6 +53,7 @@ export class TransactionsService {
           createdAt,
           balance,
           amount,
+          type,
         };
       },
     );
