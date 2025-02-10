@@ -4,6 +4,7 @@ import {
   HttpStatus,
   Injectable,
   NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
@@ -18,6 +19,100 @@ export class GroupsService {
     private sse: SseService,
     private prisma: DatabaseService,
   ) {}
+
+  // calculateBalances(
+  //   transactions: Prisma.TransactionGetPayload<{ include: { splits: true } }>[],
+  // ) {
+  //   const balances: Record<string, number> = {};
+
+  //   transactions.forEach((transaction) => {
+  //     const { paidById, amount, splits } = transaction;
+
+  //     if (!balances[paidById]) balances[paidById] = 0;
+
+  //     balances[paidById] += amount;
+
+  //     splits.forEach((split) => {
+  //       if (!balances[split.userId]) balances[split.userId] = 0;
+
+  //       balances[split.userId] -= split.amount;
+  //     });
+  //   });
+
+  //   return balances;
+  // }
+
+  calculateBalances(
+    transactions: Prisma.TransactionGetPayload<{
+      include: {
+        splits: {
+          include: { user: { select: { id: true; name: true } } };
+        };
+        paidBy: { select: { id: true; name: true } };
+      };
+    }>[],
+  ) {
+    const balances: Record<string, { user: any; balance: number }> = {};
+
+    transactions.forEach((transaction) => {
+      const { paidBy, amount, splits } = transaction;
+
+      // Ensure payer is initialized
+      if (!balances[paidBy.id])
+        balances[paidBy.id] = { user: paidBy, balance: 0 };
+
+      // The payer gets a positive balance (paid money)
+      balances[paidBy.id].balance += amount;
+
+      // Distribute the debt to all users in the splits
+      splits.forEach(({ user, amount }: any) => {
+        if (!balances[user.id]) balances[user.id] = { user, balance: 0 };
+
+        // The split users owe money, so subtract their amount
+        balances[user.id].balance -= amount;
+      });
+    });
+
+    return balances;
+  }
+
+  settleDebts(balances: Record<string, { user: any; balance: number }>) {
+    const creditors: { user: any; amount: number }[] = [];
+    const debtors: { user: any; amount: number }[] = [];
+
+    Object.values(balances).forEach(({ user, balance }) => {
+      if (balance > 0) {
+        creditors.push({ user, amount: balance });
+      } else if (balance < 0) {
+        debtors.push({ user, amount: -balance }); // Convert to positive for easier calculations
+      }
+    });
+
+    creditors.sort((a, b) => b.amount - a.amount);
+    debtors.sort((a, b) => b.amount - a.amount);
+
+    const transactions: { from: any; to: any; amount: number }[] = [];
+
+    while (debtors.length > 0 && creditors.length > 0) {
+      const debtor = debtors[0];
+      const creditor = creditors[0];
+
+      const settledAmount = Math.min(debtor.amount, creditor.amount);
+      transactions.push({
+        from: debtor.user,
+        to: creditor.user,
+        amount: settledAmount,
+      });
+
+      debtor.amount -= settledAmount;
+      creditor.amount -= settledAmount;
+
+      if (debtor.amount === 0) debtors.shift();
+      if (creditor.amount === 0) creditors.shift();
+    }
+
+    return transactions;
+  }
 
   async findMany(userId: string) {
     return await this.prisma.group.findMany({
@@ -37,32 +132,50 @@ export class GroupsService {
   }
 
   async findGroupById(userId: string, groupId: string) {
-    const response = await this.prisma.group.findUnique({
-      where: {
-        id: groupId,
-        members: { some: { userId } },
-      },
-      include: {
-        members: {
-          include: { user: true },
+    try {
+      const response = await this.prisma.group.findUnique({
+        where: {
+          id: groupId,
+          members: { some: { userId } },
         },
-        createdBy: true,
-      },
-    });
+        include: {
+          members: {
+            include: { user: true },
+          },
+          transactions: {
+            include: {
+              splits: {
+                include: { user: { select: { id: true, name: true } } },
+              },
+              paidBy: { select: { id: true, name: true } },
+            },
+          },
+          createdBy: true,
+        },
+      });
 
-    const transformedResponse = {
-      ...response,
-      members: response?.members.map(
-        ({ joinedAt, user: { id, email, name } }) => ({
-          id,
-          joinedAt,
-          email,
-          name,
-        }),
-      ),
-    };
+      if (response) {
+        const balances = this.calculateBalances(response.transactions);
+        const settlements = this.settleDebts(balances);
 
-    return transformedResponse;
+        const transformedResponse = {
+          ...response,
+          members: response?.members.map(
+            ({ joinedAt, user: { id, email, name } }) => ({
+              id,
+              joinedAt,
+              email,
+              name,
+            }),
+          ),
+          settlements,
+        };
+
+        return transformedResponse;
+      }
+    } catch (error) {
+      throw new InternalServerErrorException(error);
+    }
   }
 
   async create(
