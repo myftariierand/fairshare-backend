@@ -54,7 +54,7 @@ export class FriendshipsController {
     @UserId() userId,
     @Param() { id }: CancelFriendRequestParamsDto,
   ) {
-    this.friendshipsService.cancelRequest(userId, id);
+    return this.friendshipsService.cancelRequest(userId, id);
   }
 
   @Delete('requests/:id/unfriend')
@@ -62,6 +62,6 @@ export class FriendshipsController {
     @UserId() userId,
     @Param() { id }: CancelFriendRequestParamsDto,
   ) {
-    this.friendshipsService.unfriend(userId, id);
+    return this.friendshipsService.unfriend(userId, id);
   }
 }

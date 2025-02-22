@@ -59,6 +59,7 @@ export class FriendshipsService {
           id: friend.id,
           name: friend.name,
           email: friend.email,
+          requestId: friendship.id,
           createdAt: friend.createdAt,
           updatedAt: friend.updatedAt,
           invitations: friend.invitationReceiver.map((invitation) => ({
