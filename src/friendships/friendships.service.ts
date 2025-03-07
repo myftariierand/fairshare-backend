@@ -181,12 +181,24 @@ export class FriendshipsService {
   }
 
   async unfriend(userId: string, id: string) {
-    return this.prisma.friendships.delete({
-      where: {
-        id,
-        status: 'ACCEPTED',
-        OR: [{ senderId: userId }, { receiverId: userId }],
-      },
-    });
+    try {
+      const response = await this.prisma.friendships.delete({
+        where: {
+          id,
+          status: 'ACCEPTED',
+          OR: [{ senderId: userId }, { receiverId: userId }],
+        },
+      });
+
+      const eventReceiver =
+        response.senderId === userId ? response.receiverId : response.senderId;
+
+      this.sse.emit([eventReceiver], SseEventType.FRIEND_REMOVED, '');
+
+      return response;
+    } catch (error) {
+      console.log(error);
+      throw new InternalServerErrorException();
+    }
   }
 }
