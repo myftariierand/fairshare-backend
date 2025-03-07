@@ -56,7 +56,7 @@ model GroupInvitation {
   groupId    String
   senderId   String
   receiverId String
-  group      Group            @relation(fields: [groupId], references: [id])
+  group      Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
   receiver   User             @relation("GroupInvitationReceiver", fields: [receiverId], references: [id])
   sender     User             @relation("GroupInvitationSender", fields: [senderId], references: [id])
 
