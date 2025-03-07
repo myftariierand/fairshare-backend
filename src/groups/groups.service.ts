@@ -128,6 +128,7 @@ export class GroupsService {
           select: { members: true },
         },
       },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
