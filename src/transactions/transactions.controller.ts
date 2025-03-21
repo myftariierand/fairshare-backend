@@ -19,6 +19,7 @@ import {
   DeleteTransactionParamsDto,
   GetTransactionParamsDto,
   GetTransactionByIdParamsDto,
+  SettleDebtBodyDto,
 } from 'src/schema/transactions';
 
 @Controller('transactions')
@@ -78,5 +79,10 @@ export class TransactionsController {
     @Param() { id }: DeleteTransactionParamsDto,
   ) {
     return this.transactionsService.deleteTransaction(userId, id);
+  }
+
+  @Post('/settle')
+  settleDebt(@UserId() userId, @Body() body: SettleDebtBodyDto) {
+    return this.transactionsService.settle(userId, body);
   }
 }

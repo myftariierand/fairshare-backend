@@ -99,3 +99,12 @@ const GetTransactionByIdParamsSchema = z.object({
 export class GetTransactionByIdParamsDto extends createZodDto(
   GetTransactionByIdParamsSchema,
 ) {}
+
+const SettleDebtBodySchema = z.object({
+  groupId: z.string().uuid(),
+  amount: z.number().positive(),
+  description: z.string().min(4),
+  paidBy: z.string().uuid(),
+});
+
+export class SettleDebtBodyDto extends createZodDto(SettleDebtBodySchema) {}

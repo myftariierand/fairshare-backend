@@ -41,7 +41,7 @@ export class TransactionsService {
           paidById === userId
             ? splits.reduce(
                 (sum, split) =>
-                  sum + (split.userId !== userId ? split.amount : 0),
+                  sum + (split.userId !== userId ? split.amount.toNumber() : 0),
                 0,
               )
             : -(userSplit?.amount ?? 0);
@@ -215,5 +215,29 @@ export class TransactionsService {
         }
       }
     }
+  }
+
+  async settle(
+    userId: string,
+    body: {
+      groupId: string;
+      amount: number;
+      description: string;
+      paidBy: string;
+    },
+  ) {
+    const { amount, description, groupId, paidBy } = body;
+
+    await this.prisma.transaction.create({
+      data: {
+        amount,
+        description,
+        group: { connect: { id: groupId } },
+        createdBy: { connect: { id: userId } },
+        paidBy: { connect: { id: paidBy } },
+        splits: { create: { amount, user: { connect: { id: userId } } } },
+        type: 'SETTLEMENT',
+      },
+    });
   }
 }
