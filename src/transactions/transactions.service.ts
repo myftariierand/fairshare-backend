@@ -41,8 +41,7 @@ export class TransactionsService {
           paidById === userId
             ? splits.reduce(
                 (sum, split) =>
-                  sum +
-                  (split.userId !== userId ? +split.amount.toFixed(2) : 0),
+                  sum + (split.userId !== userId ? split.amount : 0),
                 0,
               )
             : -(userSplit?.amount ?? 0);

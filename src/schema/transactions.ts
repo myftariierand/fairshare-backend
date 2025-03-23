@@ -23,7 +23,9 @@ const CreateTransactionSchema = z
         0,
       );
 
-      return amount === splitsAmount;
+      const difference = Math.abs(amount - splitsAmount);
+
+      return difference < 0.02;
     },
     {
       message: 'The sum of all splits should be equal to total amount',
@@ -64,7 +66,9 @@ const UpdateTransactionSchema = z
           0,
         );
 
-        return amount === splitsAmount;
+        const difference = Math.abs(amount - splitsAmount);
+
+        return difference < 0.02;
       }
     },
     {

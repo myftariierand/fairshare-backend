@@ -65,7 +65,7 @@ model GroupInvitation {
 
 model Transaction {
   id          String             @id @default(uuid())
-  amount      Decimal            @db.Decimal()
+  amount      Float
   description String
   type        TransactionType    @default(EXPENSE)
   createdAt   DateTime           @default(now())
@@ -81,7 +81,7 @@ model Transaction {
 
 model TransactionSplit {
   id            String      @id @default(uuid())
-  amount        Decimal
+  amount        Float
   userId        String
   transactionId String
   transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)

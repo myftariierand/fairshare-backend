@@ -62,7 +62,7 @@ export class GroupsService {
         balances[paidBy.id] = { user: paidBy, balance: 0 };
 
       // The payer gets a positive balance (paid money)
-      balances[paidBy.id].balance += +amount.toFixed(2);
+      balances[paidBy.id].balance += amount;
 
       // Distribute the debt to all users in the splits
       splits.forEach(({ user, amount }: any) => {
