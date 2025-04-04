@@ -27,9 +27,9 @@ export class UsersController {
   @Get('search')
   async searchUsers(
     @UserId() userId,
-    @Query() { query, limit, offset }: SearchUsersQueryDto,
+    @Query() { query, limit, offset, groupId }: SearchUsersQueryDto,
   ) {
-    return this.usersService.searchUsers(userId, query, limit, offset);
+    return this.usersService.searchUsers(userId, query, limit, offset, groupId);
   }
 
   @Get(':id')

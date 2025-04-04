@@ -15,6 +15,7 @@ const SearchUsersQuerySchema = z.object({
   query: z.string(),
   limit: z.number().optional().default(10),
   offset: z.number().optional().default(0),
+  groupId: z.string().uuid().optional(),
 });
 
 export class SearchUsersQueryDto extends createZodDto(SearchUsersQuerySchema) {}

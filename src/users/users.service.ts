@@ -24,6 +24,7 @@ export class UsersService {
     query: string,
     limit: number,
     offset: number,
+    groupId?: string,
   ) {
     const res = this.prisma.user.findMany({
       where: {
@@ -36,6 +37,7 @@ export class UsersService {
       skip: offset,
       include: {
         friendshipsReceiver: { where: { OR: [{ senderId: userId }] } },
+        invitationReceiver: { where: { groupId } },
       },
     });
 
