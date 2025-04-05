@@ -19,7 +19,7 @@ model User {
   groups              Group[]            @relation("GroupCreatedBy")
   invitationReceiver  GroupInvitation[]  @relation("GroupInvitationReceiver")
   invitationSender    GroupInvitation[]  @relation("GroupInvitationSender")
-  memeberships        GroupMember[]
+  memberships         GroupMember[]
   createdTransactions Transaction[]      @relation("CreatedBy")
   paidTransactions    Transaction[]      @relation("PaidBy")
   transactionSplits   TransactionSplit[]
@@ -28,6 +28,7 @@ model User {
 model Group {
   id           String            @id @default(uuid())
   name         String
+  currency     String
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   createdById  String

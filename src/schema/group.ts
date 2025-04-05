@@ -3,6 +3,7 @@ import { createZodDto } from 'nestjs-zod';
 
 const CreateGroupSchema = z.object({
   name: z.string(),
+  currency: z.string(),
 });
 
 export class CreateGroupDto extends createZodDto(CreateGroupSchema) {}
@@ -13,6 +14,7 @@ export class UpdateParamsDto extends createZodDto(UpdateParamsSchema) {}
 
 const UpdateGroupSchema = z.object({
   name: z.string(),
+  currency: z.string(),
 });
 
 export class UpdateGroupDto extends createZodDto(UpdateGroupSchema) {}
