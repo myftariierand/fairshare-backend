@@ -11,7 +11,7 @@ import { Prisma } from '@prisma/client';
 import { Response } from 'express';
 import * as bcrypt from 'bcrypt';
 
-import { LoginDto } from 'src/auth/schema';
+import { LoginDto, RegisterDto } from 'src/auth/schema';
 
 import { UsersService } from 'src/users/users.service';
 
@@ -82,9 +82,9 @@ export class AuthService {
     }
   }
 
-  async register(registerDto, response: Response) {
+  async register({ email, name, password }: RegisterDto, response: Response) {
     try {
-      const user = await this.usersService.create(registerDto);
+      const user = await this.usersService.create({ email, name, password });
 
       const payload = { id: user.id };
       const accessToken = await this.jwtService.signAsync(payload, {
