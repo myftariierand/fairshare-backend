@@ -226,18 +226,43 @@ export class TransactionsService {
       paidBy: string;
     },
   ) {
-    const { amount, description, groupId, paidBy } = body;
+    try {
+      const { amount, description, groupId, paidBy } = body;
 
-    await this.prisma.transaction.create({
-      data: {
-        amount,
-        description,
-        group: { connect: { id: groupId } },
-        createdBy: { connect: { id: userId } },
-        paidBy: { connect: { id: paidBy } },
-        splits: { create: { amount, user: { connect: { id: userId } } } },
-        type: 'SETTLEMENT',
-      },
-    });
+      const res = await this.prisma.transaction.create({
+        data: {
+          amount,
+          description,
+          group: { connect: { id: groupId } },
+          createdBy: { connect: { id: userId } },
+          paidBy: { connect: { id: paidBy } },
+          splits: { create: { amount, user: { connect: { id: userId } } } },
+          type: 'SETTLEMENT',
+        },
+        include: {
+          group: { include: { members: true } },
+          createdBy: true,
+          paidBy: true,
+        },
+      });
+
+      const membersIds = res.group.members.map(({ userId }) => userId);
+
+      this.sse.emit(
+        membersIds,
+        SseEventType.TRANSACTION_SETTLED,
+        `${res.createdBy.name} and ${res.paidBy.name} have settled up `,
+      );
+
+      return res;
+    } catch (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new NotFoundException(
+            "Transaction not found or you don't have access",
+          );
+        }
+      }
+    }
   }
 }
