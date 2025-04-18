@@ -43,6 +43,11 @@ export class GroupsController {
     return this.groupsService.findGroupById(userId, id);
   }
 
+  @Post(':id/join')
+  async joinGroup(@UserId() userId, @Param() { id }) {
+    return this.groupsService.joinGroup(userId, id);
+  }
+
   @Post()
   createGroup(@UserId() userId, @Body() createGroupDto: CreateGroupDto) {
     return this.groupsService.create(userId, createGroupDto);
