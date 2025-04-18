@@ -20,28 +20,6 @@ export class GroupsService {
     private prisma: DatabaseService,
   ) {}
 
-  // calculateBalances(
-  //   transactions: Prisma.TransactionGetPayload<{ include: { splits: true } }>[],
-  // ) {
-  //   const balances: Record<string, number> = {};
-
-  //   transactions.forEach((transaction) => {
-  //     const { paidById, amount, splits } = transaction;
-
-  //     if (!balances[paidById]) balances[paidById] = 0;
-
-  //     balances[paidById] += amount;
-
-  //     splits.forEach((split) => {
-  //       if (!balances[split.userId]) balances[split.userId] = 0;
-
-  //       balances[split.userId] -= split.amount;
-  //     });
-  //   });
-
-  //   return balances;
-  // }
-
   calculateBalances(
     transactions: Prisma.TransactionGetPayload<{
       include: {
@@ -405,6 +383,51 @@ export class GroupsService {
       );
 
       return invite;
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+  async joinGroup(userId: string, groupId: string) {
+    try {
+      const group = await this.prisma.group.update({
+        where: {
+          id: groupId,
+        },
+        data: {
+          members: {
+            connectOrCreate: {
+              where: {
+                id: userId,
+              },
+              create: {
+                user: {
+                  connect: {
+                    id: userId,
+                  },
+                },
+              },
+            },
+          },
+        },
+        include: {
+          members: { include: { user: true } },
+        },
+      });
+
+      const membersIds = group.members
+        .filter((member) => member.userId !== userId)
+        .map(({ userId }) => userId);
+
+      const member = group.members.find((member) => member.userId === userId);
+
+      this.sse.emit(
+        membersIds,
+        SseEventType.GROUP_JOINED,
+        `${member?.user.name} joined ${group.name}`,
+      );
+
+      return { success: true };
     } catch (error) {
       console.log(error);
     }
