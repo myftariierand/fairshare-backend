@@ -432,4 +432,90 @@ export class GroupsService {
       console.log(error);
     }
   }
+
+  async removeMember(userId: string, groupId: string, memberId: string) {
+    try {
+      const group = await this.prisma.group.findUnique({
+        where: { id: groupId },
+        select: { createdById: true },
+      });
+
+      if (!group || group.createdById !== userId) {
+        throw new ForbiddenException('You are not the owner of this group.');
+      }
+
+      const activeTransactions = await this.prisma.transaction.findMany({
+        where: {
+          groupId,
+          OR: [
+            { paidById: memberId },
+            { splits: { some: { userId: memberId } } },
+          ],
+        },
+      });
+
+      if (activeTransactions.length > 0) {
+        throw new ForbiddenException(
+          'The member cannot be removed as they are part of active transactions.',
+        );
+      }
+
+      const member = await this.prisma.groupMember.findUnique({
+        where: {
+          groupId_userId: {
+            userId: memberId,
+            groupId,
+          },
+        },
+        include: { user: true },
+      });
+
+      if (!member) {
+        throw new NotFoundException('Member not found in the group.');
+      }
+
+      const updatedGroup = await this.prisma.group.update({
+        where: { id: groupId },
+        data: {
+          members: {
+            delete: {
+              groupId_userId: {
+                userId: memberId,
+                groupId,
+              },
+            },
+          },
+        },
+        include: { members: { include: { user: true } } },
+      });
+
+      await this.prisma.groupInvitation.deleteMany({
+        where: {
+          receiverId: memberId,
+          groupId: groupId,
+        },
+      });
+
+      const membersIds = updatedGroup.members
+        .filter((member) => member.userId !== memberId)
+        .map(({ userId }) => userId);
+
+      this.sse.emit(
+        [memberId],
+        SseEventType.GROUP_MEMBER_REMOVED,
+        `You have been removed from ${updatedGroup.name}`,
+      );
+
+      this.sse.emit(
+        membersIds,
+        SseEventType.GROUP_MEMBER_REMOVED,
+        `${member.user.name} removed from ${updatedGroup.name}`,
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
+  }
 }

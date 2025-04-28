@@ -20,6 +20,7 @@ import {
   GroupInviteParamsDto,
   AcceptGroupInviteParamsDto,
   RejectGroupInviteParamsDto,
+  GroupMemberRemoveParamsDto,
 } from 'src/schema/group';
 
 import { UserId } from 'src/users/user.decorator';
@@ -86,5 +87,13 @@ export class GroupsController {
   @Post('invite/:inviteId/reject')
   rejectInvite(@Param() { inviteId }: RejectGroupInviteParamsDto) {
     return this.groupsService.rejectInvitation(inviteId);
+  }
+
+  @Delete(':groupId/remove/:memberId')
+  removeMember(
+    @UserId() userId,
+    @Param() { groupId, memberId }: GroupMemberRemoveParamsDto,
+  ) {
+    return this.groupsService.removeMember(userId, groupId, memberId);
   }
 }
