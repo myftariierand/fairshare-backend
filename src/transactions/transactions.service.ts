@@ -153,10 +153,6 @@ export class TransactionsService {
     if (!groupMemebersIds.includes(userId))
       throw new ForbiddenException('You are not a member of this group');
 
-    const userIds = splits.map((split) => split.userId);
-    if (groupMemebersIds.length !== userIds.length)
-      throw new ForbiddenException('All users should be members of the group');
-
     const updatedSplits = splits.map(({ userId, amount }) => ({
       where: { userId },
       data: { amount },
