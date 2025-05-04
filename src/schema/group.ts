@@ -58,3 +58,12 @@ const RejectGroupParamsSchema = z.object({
 export class RejectGroupInviteParamsDto extends createZodDto(
   RejectGroupParamsSchema,
 ) {}
+
+const GroupMemberRemoveSchmea = z.object({
+  groupId: z.string().uuid(),
+  memberId: z.string().uuid(),
+});
+
+export class GroupMemberRemoveParamsDto extends createZodDto(
+  GroupMemberRemoveSchmea,
+) {}
