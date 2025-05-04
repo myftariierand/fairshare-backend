@@ -89,12 +89,15 @@ export class TransactionsService {
     });
     if (!foundGroup) throw new NotFoundException('Group not found');
 
-    const groupMemebersIds = foundGroup.members.map((member) => member.userId);
-    if (!groupMemebersIds.includes(userId))
+    const groupMembersIds = foundGroup.members.map((member) => member.userId);
+    if (!groupMembersIds.includes(userId))
       throw new ForbiddenException('You are not a member of this group');
 
     const userIds = splits.map((split) => split.userId);
-    if (groupMemebersIds.length !== userIds.length)
+    const allUsersAreMembers = userIds.every((userId) =>
+      groupMembersIds.includes(userId),
+    );
+    if (allUsersAreMembers)
       throw new ForbiddenException('All users should be members of the group');
 
     const transaction = await this.prisma.transaction.create({
@@ -125,7 +128,7 @@ export class TransactionsService {
     const member = foundGroup.members.find(
       (member) => member.userId === userId,
     );
-    const receiversIds = groupMemebersIds.filter((id) => id !== userId);
+    const receiversIds = groupMembersIds.filter((id) => id !== userId);
     this.sse.emit(
       receiversIds,
       SseEventType.TRANSACTION_ADDED,
