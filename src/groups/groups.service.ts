@@ -444,7 +444,7 @@ export class GroupsService {
         throw new ForbiddenException('You are not the owner of this group.');
       }
 
-      const activeTransactions = await this.prisma.transaction.findMany({
+      const transactions = await this.prisma.transaction.findMany({
         where: {
           groupId,
           OR: [
@@ -452,11 +452,19 @@ export class GroupsService {
             { splits: { some: { userId: memberId } } },
           ],
         },
+        include: {
+          splits: {
+            include: { user: { select: { id: true, name: true } } },
+          },
+          paidBy: { select: { id: true, name: true } },
+        },
       });
 
-      if (activeTransactions.length > 0) {
+      const balances = this.calculateBalances(transactions);
+
+      if (balances[memberId].balance !== 0) {
         throw new ForbiddenException(
-          'The member cannot be removed as they are part of active transactions.',
+          'This member cannot be removed until all balances are settled.',
         );
       }
 
