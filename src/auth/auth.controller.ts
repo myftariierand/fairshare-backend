@@ -16,6 +16,7 @@ import { Cookies, Public } from 'src/auth/auth.decorators';
 import { LoginDto, RegisterDto } from 'src/auth/schema';
 import { UserDto } from 'src/schema/user';
 import { ZodSerializerDto } from 'nestjs-zod';
+import { User } from '@prisma/client';
 
 @Controller('auth')
 export class AuthController {
@@ -60,5 +61,14 @@ export class AuthController {
   @ZodSerializerDto(UserDto)
   getProfile(@Req() req) {
     return this.authService.getProfile(req.id);
+  }
+
+  @Post('change-password')
+  async changePassword(
+    @Req() req,
+    @Body()
+    { password, newPassword }: { password: string; newPassword: string },
+  ): Promise<User> {
+    return this.authService.changePassword(req.id, password, newPassword);
   }
 }
