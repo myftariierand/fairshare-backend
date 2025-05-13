@@ -67,8 +67,17 @@ export class AuthController {
   async changePassword(
     @Req() req,
     @Body()
-    { password, newPassword }: { password: string; newPassword: string },
+    {
+      password,
+      newPassword,
+      confirmPassword,
+    }: { password: string; newPassword: string; confirmPassword: string },
   ): Promise<User> {
-    return this.authService.changePassword(req.id, password, newPassword);
+    return this.authService.changePassword(
+      req.id,
+      password,
+      newPassword,
+      confirmPassword,
+    );
   }
 }

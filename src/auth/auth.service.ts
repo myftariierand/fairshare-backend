@@ -145,7 +145,22 @@ export class AuthService {
     return user;
   }
 
-  async changePassword(userId: string, password: string, newPassword: string) {
+  async changePassword(
+    userId: string,
+    password: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
+    if (newPassword !== confirmPassword) {
+      throw new HttpException(
+        {
+          status: HttpStatus.BAD_REQUEST,
+          message: 'New password and confirmation do not match',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const user = await this.usersService.findUnique({ id: userId });
 
     if (!user) {
