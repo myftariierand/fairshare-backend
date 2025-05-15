@@ -14,12 +14,14 @@ import * as bcrypt from 'bcrypt';
 import { LoginDto, RegisterDto } from 'src/auth/schema';
 
 import { UsersService } from 'src/users/users.service';
+import { DatabaseService } from 'src/database/database.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private prisma: DatabaseService,
   ) {}
 
   async login(
@@ -141,5 +143,53 @@ export class AuthService {
     const user = await this.usersService.findUnique({ id });
 
     return user;
+  }
+
+  async changePassword(
+    userId: string,
+    password: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
+    if (newPassword !== confirmPassword) {
+      throw new HttpException(
+        {
+          status: HttpStatus.BAD_REQUEST,
+          message: 'New password and confirmation do not match',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const user = await this.usersService.findUnique({ id: userId });
+
+    if (!user) {
+      throw new HttpException(
+        {
+          status: HttpStatus.NOT_FOUND,
+          message: 'User not found',
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      throw new HttpException(
+        {
+          status: HttpStatus.UNAUTHORIZED,
+          message: 'Invalid password',
+        },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    const hashedPwd = await bcrypt.hash(newPassword, 10);
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPwd },
+    });
   }
 }
