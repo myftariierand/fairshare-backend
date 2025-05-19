@@ -80,4 +80,20 @@ export class AuthController {
       confirmPassword,
     );
   }
+
+  @Public()
+  @Post('forgot-password')
+  async forgotPassword(@Body('email') email: string) {
+    return this.authService.forgotPassword(email);
+  }
+
+  @Public()
+  @Post('reset-password')
+  async resetPassword(
+    @Body('token') token: string,
+    @Body('password') password: string,
+    @Body('confirmPassword') confirmPassword: string,
+  ) {
+    return this.authService.resetPassword(token, password, confirmPassword);
+  }
 }

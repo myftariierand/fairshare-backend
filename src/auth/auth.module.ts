@@ -5,9 +5,10 @@ import { AuthService } from 'src/auth/auth.service';
 import { AuthController } from 'src/auth/auth.controller';
 
 import { UsersModule } from 'src/users/users.module';
+import { EmailModule } from 'src/email/email.module';
 
 @Module({
-  imports: [UsersModule, JwtModule.register({ global: true })],
+  imports: [UsersModule, JwtModule.register({ global: true }), EmailModule],
   providers: [AuthService],
   controllers: [AuthController],
 })
