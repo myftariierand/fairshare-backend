@@ -15,6 +15,7 @@ import { LoginDto, RegisterDto } from 'src/auth/schema';
 
 import { UsersService } from 'src/users/users.service';
 import { DatabaseService } from 'src/database/database.service';
+import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 @Injectable()
 export class AuthService {
@@ -22,6 +23,7 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private prisma: DatabaseService,
+    private activityLogsService: ActivityLogsService,
   ) {}
 
   async login(
@@ -187,9 +189,16 @@ export class AuthService {
 
     const hashedPwd = await bcrypt.hash(newPassword, 10);
 
-    return this.prisma.user.update({
+    const res = await this.prisma.user.update({
       where: { id: userId },
       data: { password: hashedPwd },
     });
+
+    await this.activityLogsService.createActivityLog({
+      action: 'USER_CHANGED_PASSWORD',
+      user: { connect: { id: userId } },
+    });
+
+    return res;
   }
 }
