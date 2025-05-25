@@ -7,6 +7,7 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
+import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -15,6 +16,7 @@ export class TransactionsService {
   constructor(
     private sse: SseService,
     private prisma: DatabaseService,
+    private activityLogsService: ActivityLogsService,
   ) {}
 
   async findTransactions(userId: string, groupId: string) {
@@ -125,6 +127,12 @@ export class TransactionsService {
       },
     });
 
+    await this.activityLogsService.createActivityLog({
+      action: 'TRANSACTION_CREATED',
+      user: { connect: { id: userId } },
+      transaction: { connect: { id: transaction.id } },
+    });
+
     const member = foundGroup.members.find(
       (member) => member.userId === userId,
     );
@@ -172,6 +180,12 @@ export class TransactionsService {
       },
     });
 
+    await this.activityLogsService.createActivityLog({
+      action: 'TRANSACTION_UPDATED',
+      user: { connect: { id: userId } },
+      transaction: { connect: { id: transaction.id } },
+    });
+
     const receivers = groupMemebersIds.filter((id) => id !== userId);
     const updater = foundGroup.members.find(
       (member) => member.userId === userId,
@@ -191,6 +205,12 @@ export class TransactionsService {
       const transaction = await this.prisma.transaction.delete({
         where: { id, splits: { some: { userId } } },
         include: { splits: { include: { user: true } } },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'TRANSACTION_DELETED',
+        user: { connect: { id: userId } },
+        transaction: { connect: { id: transaction.id } },
       });
 
       const receivers = transaction.splits
@@ -243,6 +263,12 @@ export class TransactionsService {
           createdBy: true,
           paidBy: true,
         },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'TRANSACTION_SETTLED',
+        user: { connect: { id: userId } },
+        transaction: { connect: { id: res.id } },
       });
 
       const membersIds = res.group.members.map(({ userId }) => userId);
