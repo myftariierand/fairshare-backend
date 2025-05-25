@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
+import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -18,6 +19,7 @@ export class GroupsService {
   constructor(
     private sse: SseService,
     private prisma: DatabaseService,
+    private activityLogsService: ActivityLogsService,
   ) {}
 
   calculateBalances(
@@ -161,7 +163,7 @@ export class GroupsService {
     userId: string,
     groupCreateInput: Prisma.GroupCreateWithoutCreatedByInput,
   ) {
-    await this.prisma.group.create({
+    const res = await this.prisma.group.create({
       data: {
         ...groupCreateInput,
         createdBy: {
@@ -185,6 +187,14 @@ export class GroupsService {
         },
       },
     });
+
+    await this.activityLogsService.createActivityLog({
+      action: 'GROUP_CREATED',
+      user: { connect: { id: userId } },
+      group: { connect: { id: res.id } },
+    });
+
+    return res;
   }
 
   async update(
@@ -200,6 +210,12 @@ export class GroupsService {
         },
         data: updateGroupDto,
         include: { members: { include: { user: true } } },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_UPDATED',
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
       });
 
       const memebersIds = response.members
@@ -231,6 +247,12 @@ export class GroupsService {
           AND: [{ createdById: userId }],
         },
         include: { createdBy: true, members: { where: { NOT: { userId } } } },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_DELETED',
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
       });
 
       const membersIds = response.members.map((member) => member.userId);
@@ -281,6 +303,12 @@ export class GroupsService {
           group: true,
           sender: true,
         },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_INVITATION_SENT',
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
       });
 
       this.sse.emit(
@@ -340,6 +368,18 @@ export class GroupsService {
         include: { receiver: true },
       });
 
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_INVITATION_ACCEPTED',
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_MEMBER_JOINED',
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
+      });
+
       const membersIds = group.members
         .filter(
           (member) =>
@@ -374,6 +414,12 @@ export class GroupsService {
           status: 'PENDING',
         },
         include: { receiver: true, group: true },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_INVITATION_REJECTED',
+        user: { connect: { id: invite.receiverId } },
+        group: { connect: { id: invite.groupId } },
       });
 
       this.sse.emit(
@@ -413,6 +459,12 @@ export class GroupsService {
         include: {
           members: { include: { user: true } },
         },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_MEMBER_JOINED',
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
       });
 
       const membersIds = group.members
@@ -502,6 +554,13 @@ export class GroupsService {
           receiverId: memberId,
           groupId: groupId,
         },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_MEMBER_REMOVED',
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
+        targetUser: { connect: { id: memberId } },
       });
 
       const membersIds = updatedGroup.members
