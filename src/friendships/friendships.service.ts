@@ -4,6 +4,7 @@ import { Friendships } from '@prisma/client';
 
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
+import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -12,6 +13,7 @@ export class FriendshipsService {
   constructor(
     private sse: SseService,
     private prisma: DatabaseService,
+    private activityLogsService: ActivityLogsService,
   ) {}
 
   async findFriends(userId: string) {
@@ -103,6 +105,13 @@ export class FriendshipsService {
         },
       });
 
+      this.activityLogsService.createActivityLog({
+        action: 'FRIENDSHIP_REQUEST_SENT',
+        user: { connect: { id: userId } },
+        targetUser: { connect: { id: receiverId } },
+        friendship: { connect: { id: response.id } },
+      });
+
       this.sse.emit(
         [receiverId],
         SseEventType.FRIEND_REQUEST_RECEIVED,
@@ -131,6 +140,12 @@ export class FriendshipsService {
         },
       });
 
+      this.activityLogsService.createActivityLog({
+        action: 'FRIENDSHIP_REQUEST_ACCEPTED',
+        user: { connect: { id: userId } },
+        friendship: { connect: { id: response.id } },
+      });
+
       this.sse.emit(
         [response.senderId],
         SseEventType.FRIEND_REQUEST_ACCEPTED,
@@ -157,6 +172,12 @@ export class FriendshipsService {
         },
       });
 
+      this.activityLogsService.createActivityLog({
+        action: 'FRIENDSHIP_REQUEST_REJECTED',
+        user: { connect: { id: userId } },
+        friendship: { connect: { id: response.id } },
+      });
+
       this.sse.emit(
         [response.senderId],
         SseEventType.FRIEND_REQUEST_REJECTED,
@@ -171,13 +192,21 @@ export class FriendshipsService {
   }
 
   async cancelRequest(userId: string, id: string) {
-    return this.prisma.friendships.delete({
+    const res = await this.prisma.friendships.delete({
       where: {
         id,
         senderId: userId,
         status: 'PENDING',
       },
     });
+
+    this.activityLogsService.createActivityLog({
+      action: 'FRIENDSHIP_REQUEST_CANCELLED',
+      user: { connect: { id: userId } },
+      friendship: { connect: { id: res.id } },
+    });
+
+    return res;
   }
 
   async unfriend(userId: string, id: string) {
@@ -192,6 +221,11 @@ export class FriendshipsService {
 
       const eventReceiver =
         response.senderId === userId ? response.receiverId : response.senderId;
+
+      this.activityLogsService.createActivityLog({
+        action: 'FRIENDSHIP_REMOVED',
+        user: { connect: { id: eventReceiver } },
+      });
 
       this.sse.emit([eventReceiver], SseEventType.FRIEND_REMOVED, '');
 
