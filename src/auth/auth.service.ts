@@ -253,4 +253,16 @@ export class AuthService {
       throw new ForbiddenException('Invalid or expired token');
     }
   }
+
+  async verifyResetToken(token: string) {
+    try {
+      await this.jwtService.verifyAsync(token, {
+        secret: process.env.RESET_PASSWORD_SECRET,
+      });
+
+      return { valid: true };
+    } catch (error: any) {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
+  }
 }

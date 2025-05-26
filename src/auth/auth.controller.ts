@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Query,
   Req,
   Res,
 } from '@nestjs/common';
@@ -95,5 +96,11 @@ export class AuthController {
     @Body('confirmPassword') confirmPassword: string,
   ) {
     return this.authService.resetPassword(token, password, confirmPassword);
+  }
+
+  @Public()
+  @Get('verify-reset-token')
+  async verifyResetToken(@Query() { token }: { token: string }) {
+    return this.authService.verifyResetToken(token);
   }
 }
