@@ -99,7 +99,8 @@ export class TransactionsService {
     const allUsersAreMembers = userIds.every((userId) =>
       groupMembersIds.includes(userId),
     );
-    if (allUsersAreMembers)
+
+    if (!allUsersAreMembers)
       throw new ForbiddenException('All users should be members of the group');
 
     const transaction = await this.prisma.transaction.create({
@@ -129,7 +130,9 @@ export class TransactionsService {
 
     await this.activityLogsService.createActivityLog({
       action: 'TRANSACTION_CREATED',
+      snapshot: { group: foundGroup, transaction },
       user: { connect: { id: userId } },
+      group: { connect: { id: groupId } },
       transaction: { connect: { id: transaction.id } },
     });
 
@@ -182,7 +185,9 @@ export class TransactionsService {
 
     await this.activityLogsService.createActivityLog({
       action: 'TRANSACTION_UPDATED',
+      snapshot: { group: foundGroup, transaction },
       user: { connect: { id: userId } },
+      group: { connect: { id: groupId } },
       transaction: { connect: { id: transaction.id } },
     });
 
@@ -204,13 +209,16 @@ export class TransactionsService {
     try {
       const transaction = await this.prisma.transaction.delete({
         where: { id, splits: { some: { userId } } },
-        include: { splits: { include: { user: true } } },
+        include: { group: true, splits: { include: { user: true } } },
       });
+
+      const { group, ...rest } = transaction;
 
       await this.activityLogsService.createActivityLog({
         action: 'TRANSACTION_DELETED',
+        snapshot: { group, transaction: rest },
         user: { connect: { id: userId } },
-        transaction: { connect: { id: transaction.id } },
+        group: { connect: { id: transaction.group.id } },
       });
 
       const receivers = transaction.splits
@@ -268,7 +276,7 @@ export class TransactionsService {
       await this.activityLogsService.createActivityLog({
         action: 'TRANSACTION_SETTLED',
         user: { connect: { id: userId } },
-        transaction: { connect: { id: res.id } },
+        targetUser: { connect: { id: paidBy } },
       });
 
       const membersIds = res.group.members.map(({ userId }) => userId);

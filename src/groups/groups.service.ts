@@ -163,7 +163,7 @@ export class GroupsService {
     userId: string,
     groupCreateInput: Prisma.GroupCreateWithoutCreatedByInput,
   ) {
-    const res = await this.prisma.group.create({
+    const group = await this.prisma.group.create({
       data: {
         ...groupCreateInput,
         createdBy: {
@@ -190,11 +190,12 @@ export class GroupsService {
 
     await this.activityLogsService.createActivityLog({
       action: 'GROUP_CREATED',
+      snapshot: { group },
       user: { connect: { id: userId } },
-      group: { connect: { id: res.id } },
+      group: { connect: { id: group.id } },
     });
 
-    return res;
+    return group;
   }
 
   async update(
@@ -214,6 +215,7 @@ export class GroupsService {
 
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_UPDATED',
+        snapshot: { group: response },
         user: { connect: { id: userId } },
         group: { connect: { id: groupId } },
       });
@@ -251,8 +253,8 @@ export class GroupsService {
 
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_DELETED',
+        snapshot: { group: response },
         user: { connect: { id: userId } },
-        group: { connect: { id: groupId } },
       });
 
       const membersIds = response.members.map((member) => member.userId);
@@ -307,8 +309,10 @@ export class GroupsService {
 
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_INVITATION_SENT',
+        snapshot: { group: response.group },
         user: { connect: { id: userId } },
         group: { connect: { id: groupId } },
+        targetUser: { connect: { id: receiverId } },
       });
 
       this.sse.emit(
@@ -370,12 +374,7 @@ export class GroupsService {
 
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_INVITATION_ACCEPTED',
-        user: { connect: { id: userId } },
-        group: { connect: { id: groupId } },
-      });
-
-      await this.activityLogsService.createActivityLog({
-        action: 'GROUP_MEMBER_JOINED',
+        snapshot: { group },
         user: { connect: { id: userId } },
         group: { connect: { id: groupId } },
       });
@@ -400,7 +399,7 @@ export class GroupsService {
         `${invitation.receiver.name} joined ${group.name}`,
       );
 
-      return { success: true };
+      return group;
     } catch (error) {
       console.log(error);
     }
@@ -418,6 +417,7 @@ export class GroupsService {
 
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_INVITATION_REJECTED',
+        snapshot: { group: invite.group },
         user: { connect: { id: invite.receiverId } },
         group: { connect: { id: invite.groupId } },
       });
@@ -463,6 +463,7 @@ export class GroupsService {
 
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_MEMBER_JOINED',
+        snapshot: { group },
         user: { connect: { id: userId } },
         group: { connect: { id: groupId } },
       });
@@ -479,7 +480,7 @@ export class GroupsService {
         `${member?.user.name} joined ${group.name}`,
       );
 
-      return { success: true };
+      return group;
     } catch (error) {
       console.log(error);
     }
@@ -514,7 +515,7 @@ export class GroupsService {
 
       const balances = this.calculateBalances(transactions);
 
-      if (balances[memberId].balance !== 0) {
+      if (balances.memberId && balances[memberId].balance !== 0) {
         throw new ForbiddenException(
           'This member cannot be removed until all balances are settled.',
         );
@@ -558,6 +559,7 @@ export class GroupsService {
 
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_MEMBER_REMOVED',
+        snapshot: { group: updatedGroup },
         user: { connect: { id: userId } },
         group: { connect: { id: groupId } },
         targetUser: { connect: { id: memberId } },
@@ -579,7 +581,7 @@ export class GroupsService {
         `${member.user.name} removed from ${updatedGroup.name}`,
       );
 
-      return { success: true };
+      return updatedGroup;
     } catch (error) {
       console.log(error);
       throw error;

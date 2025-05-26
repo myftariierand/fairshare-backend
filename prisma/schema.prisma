@@ -53,17 +53,16 @@ model GroupMember {
 }
 
 model GroupInvitation {
-  id          String           @id @default(uuid())
-  status      InvitationStatus @default(PENDING)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  groupId     String
-  senderId    String
-  receiverId  String
-  group       Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  receiver    User             @relation("GroupInvitationReceiver", fields: [receiverId], references: [id])
-  sender      User             @relation("GroupInvitationSender", fields: [senderId], references: [id])
-  activityLog ActivityLog[]
+  id         String           @id @default(uuid())
+  status     InvitationStatus @default(PENDING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  groupId    String
+  senderId   String
+  receiverId String
+  group      Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  receiver   User             @relation("GroupInvitationReceiver", fields: [receiverId], references: [id])
+  sender     User             @relation("GroupInvitationSender", fields: [senderId], references: [id])
 
   @@unique([groupId, receiverId])
 }
@@ -97,17 +96,35 @@ model TransactionSplit {
 }
 
 model Friendships {
-  id          String           @id @default(uuid())
-  status      FriendshipStatus @default(PENDING)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  senderId    String
-  receiverId  String
-  receiver    User             @relation("FriendshipReceiver", fields: [receiverId], references: [id])
-  sender      User             @relation("FriendshipSender", fields: [senderId], references: [id])
-  activityLog ActivityLog[]
+  id         String           @id @default(uuid())
+  status     FriendshipStatus @default(PENDING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  senderId   String
+  receiverId String
+  receiver   User             @relation("FriendshipReceiver", fields: [receiverId], references: [id])
+  sender     User             @relation("FriendshipSender", fields: [senderId], references: [id])
 
   @@unique([senderId, receiverId])
+}
+
+model ActivityLog {
+  id            String         @id @default(uuid())
+  createdAt     DateTime       @default(now())
+  action        ActivityAction
+  snapshot      Json?
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  groupId       String?
+  group         Group?         @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  transactionId String?
+  transaction   Transaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  targetUserId  String?
+  targetUser    User?          @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([groupId])
+  @@index([transactionId])
 }
 
 enum FriendshipStatus {
@@ -127,43 +144,15 @@ enum TransactionType {
   SETTLEMENT
 }
 
-model ActivityLog {
-  id          String         @id @default(uuid())
-  createdAt   DateTime       @default(now())
-  action      ActivityAction
-  
-  userId      String
-  user        User           @relation(fields: [userId], references: [id])
-
-  groupId     String?
-  group       Group?         @relation(fields: [groupId], references: [id], onDelete: Cascade)
-
-  transactionId String?
-  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-
-  friendshipId String?
-  friendship   Friendships?  @relation(fields: [friendshipId], references: [id], onDelete: Cascade)
-
-  invitationId       String?
-  invitation         GroupInvitation? @relation(fields: [invitationId], references: [id])
-
-  targetUserId       String?
-  targetUser         User?            @relation("TargetUser", fields: [targetUserId], references: [id])
-
-  @@index([userId])
-  @@index([groupId])
-  @@index([transactionId])
-  @@index([friendshipId])
-  @@index([invitationId])
-}
-
 enum ActivityAction {
+  USER_REGISTERED
   USER_UPDATED_PROFILE
   USER_CHANGED_PASSWORD
   FRIENDSHIP_REQUEST_SENT
   FRIENDSHIP_REQUEST_ACCEPTED
   FRIENDSHIP_REQUEST_REJECTED
   FRIENDSHIP_REQUEST_CANCELLED
+  // FRIENDSHIP_REQUEST_RECEIVED
   FRIENDSHIP_REMOVED
   GROUP_CREATED
   GROUP_UPDATED
@@ -174,6 +163,7 @@ enum ActivityAction {
   GROUP_INVITATION_SENT
   GROUP_INVITATION_ACCEPTED
   GROUP_INVITATION_REJECTED
+  // GROUP_INVITATION_RECEIVED
   TRANSACTION_CREATED
   TRANSACTION_UPDATED
   TRANSACTION_DELETED

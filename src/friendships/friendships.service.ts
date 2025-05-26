@@ -105,11 +105,10 @@ export class FriendshipsService {
         },
       });
 
-      this.activityLogsService.createActivityLog({
+      await this.activityLogsService.createActivityLog({
         action: 'FRIENDSHIP_REQUEST_SENT',
         user: { connect: { id: userId } },
         targetUser: { connect: { id: receiverId } },
-        friendship: { connect: { id: response.id } },
       });
 
       this.sse.emit(
@@ -140,10 +139,10 @@ export class FriendshipsService {
         },
       });
 
-      this.activityLogsService.createActivityLog({
+      await this.activityLogsService.createActivityLog({
         action: 'FRIENDSHIP_REQUEST_ACCEPTED',
         user: { connect: { id: userId } },
-        friendship: { connect: { id: response.id } },
+        targetUser: { connect: { id: response.senderId } },
       });
 
       this.sse.emit(
@@ -172,10 +171,9 @@ export class FriendshipsService {
         },
       });
 
-      this.activityLogsService.createActivityLog({
+      await this.activityLogsService.createActivityLog({
         action: 'FRIENDSHIP_REQUEST_REJECTED',
         user: { connect: { id: userId } },
-        friendship: { connect: { id: response.id } },
       });
 
       this.sse.emit(
@@ -200,10 +198,9 @@ export class FriendshipsService {
       },
     });
 
-    this.activityLogsService.createActivityLog({
+    await this.activityLogsService.createActivityLog({
       action: 'FRIENDSHIP_REQUEST_CANCELLED',
       user: { connect: { id: userId } },
-      friendship: { connect: { id: res.id } },
     });
 
     return res;
@@ -219,13 +216,13 @@ export class FriendshipsService {
         },
       });
 
+      await this.activityLogsService.createActivityLog({
+        action: 'FRIENDSHIP_REMOVED',
+        user: { connect: { id: userId } },
+      });
+
       const eventReceiver =
         response.senderId === userId ? response.receiverId : response.senderId;
-
-      this.activityLogsService.createActivityLog({
-        action: 'FRIENDSHIP_REMOVED',
-        user: { connect: { id: eventReceiver } },
-      });
 
       this.sse.emit([eventReceiver], SseEventType.FRIEND_REMOVED, '');
 

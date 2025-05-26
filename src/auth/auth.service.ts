@@ -90,6 +90,11 @@ export class AuthService {
     try {
       const user = await this.usersService.create({ email, name, password });
 
+      await this.activityLogsService.createActivityLog({
+        action: 'USER_REGISTERED',
+        user: { connect: { id: user.id } },
+      });
+
       const payload = { id: user.id };
       const accessToken = await this.jwtService.signAsync(payload, {
         secret: process.env.ACCESS_TOKEN_SECRET,
