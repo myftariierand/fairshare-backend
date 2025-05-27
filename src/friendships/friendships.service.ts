@@ -174,6 +174,7 @@ export class FriendshipsService {
       await this.activityLogsService.createActivityLog({
         action: 'FRIENDSHIP_REQUEST_REJECTED',
         user: { connect: { id: userId } },
+        targetUser: { connect: { id: response.senderId } },
       });
 
       this.sse.emit(
@@ -201,6 +202,7 @@ export class FriendshipsService {
     await this.activityLogsService.createActivityLog({
       action: 'FRIENDSHIP_REQUEST_CANCELLED',
       user: { connect: { id: userId } },
+      targetUser: { connect: { id: res.receiverId } },
     });
 
     return res;
@@ -216,13 +218,14 @@ export class FriendshipsService {
         },
       });
 
+      const eventReceiver =
+        response.senderId === userId ? response.receiverId : response.senderId;
+
       await this.activityLogsService.createActivityLog({
         action: 'FRIENDSHIP_REMOVED',
         user: { connect: { id: userId } },
+        targetUser: { connect: { id: eventReceiver } },
       });
-
-      const eventReceiver =
-        response.senderId === userId ? response.receiverId : response.senderId;
 
       this.sse.emit([eventReceiver], SseEventType.FRIEND_REMOVED, '');
 
