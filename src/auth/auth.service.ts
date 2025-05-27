@@ -7,7 +7,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Prisma } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import { Response } from 'express';
 import * as bcrypt from 'bcrypt';
 
@@ -205,5 +205,16 @@ export class AuthService {
     });
 
     return res;
+  }
+
+  async updateProfile(id: string, data: Prisma.UserUpdateInput): Promise<User> {
+    const user = await this.prisma.user.update({ where: { id }, data });
+
+    await this.activityLogsService.createActivityLog({
+      action: 'USER_UPDATED_PROFILE',
+      user: { connect: { id } },
+    });
+
+    return user;
   }
 }
