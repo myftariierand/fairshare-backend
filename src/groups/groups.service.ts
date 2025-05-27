@@ -6,7 +6,7 @@ import {
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Group, Prisma } from '@prisma/client';
 
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
@@ -251,6 +251,8 @@ export class GroupsService {
         include: { createdBy: true, members: { where: { NOT: { userId } } } },
       });
 
+      console.log(response);
+
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_DELETED',
         snapshot: { group: response },
@@ -267,6 +269,8 @@ export class GroupsService {
 
       return response;
     } catch (error) {
+      console.log(error);
+
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         throw new HttpException(
           {
@@ -586,5 +590,49 @@ export class GroupsService {
       console.log(error);
       throw error;
     }
+  }
+
+  async leaveGroup(userId: string, groupId: string): Promise<Group> {
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        groupId,
+        OR: [{ paidById: userId }, { splits: { some: { userId: userId } } }],
+      },
+      include: {
+        splits: {
+          include: { user: { select: { id: true, name: true } } },
+        },
+        paidBy: { select: { id: true, name: true } },
+      },
+    });
+
+    const balances = this.calculateBalances(transactions);
+
+    if (balances.memberId && balances[userId].balance !== 0) {
+      throw new ForbiddenException(
+        'You cannot leave this group until all balances are settled.',
+      );
+    }
+
+    const member = await this.prisma.groupMember.delete({
+      where: { groupId_userId: { groupId, userId } },
+      include: { group: true },
+    });
+
+    await this.prisma.groupInvitation.deleteMany({
+      where: {
+        receiverId: userId,
+        groupId: groupId,
+      },
+    });
+
+    await this.activityLogsService.createActivityLog({
+      action: 'GROUP_MEMBER_LEFT',
+      snapshot: { group: member.group },
+      user: { connect: { id: userId } },
+      group: { connect: { id: groupId } },
+    });
+
+    return member.group;
   }
 }
