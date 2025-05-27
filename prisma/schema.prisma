@@ -78,7 +78,7 @@ model Transaction {
   paidById    String
   createdById String
   createdBy   User               @relation("CreatedBy", fields: [createdById], references: [id])
-  group       Group              @relation(fields: [groupId], references: [id])
+  group       Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
   paidBy      User               @relation("PaidBy", fields: [paidById], references: [id])
   splits      TransactionSplit[]
   activityLog ActivityLog[]
@@ -152,7 +152,6 @@ enum ActivityAction {
   FRIENDSHIP_REQUEST_ACCEPTED
   FRIENDSHIP_REQUEST_REJECTED
   FRIENDSHIP_REQUEST_CANCELLED
-  // FRIENDSHIP_REQUEST_RECEIVED
   FRIENDSHIP_REMOVED
   GROUP_CREATED
   GROUP_UPDATED
@@ -163,7 +162,6 @@ enum ActivityAction {
   GROUP_INVITATION_SENT
   GROUP_INVITATION_ACCEPTED
   GROUP_INVITATION_REJECTED
-  // GROUP_INVITATION_RECEIVED
   TRANSACTION_CREATED
   TRANSACTION_UPDATED
   TRANSACTION_DELETED
