@@ -277,6 +277,7 @@ export class TransactionsService {
         action: 'TRANSACTION_SETTLED',
         user: { connect: { id: userId } },
         targetUser: { connect: { id: paidBy } },
+        snapshot: { group: res.group },
       });
 
       const membersIds = res.group.members.map(({ userId }) => userId);
