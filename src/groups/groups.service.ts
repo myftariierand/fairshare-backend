@@ -379,7 +379,7 @@ export class GroupsService {
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_INVITATION_ACCEPTED',
         snapshot: { group },
-        user: { connect: { id: userId } },
+        user: { connect: { id: invitation.receiverId } },
         group: { connect: { id: groupId } },
       });
 
