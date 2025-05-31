@@ -7,7 +7,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Prisma } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 import { Response } from 'express';
 import * as bcrypt from 'bcrypt';
 
@@ -15,6 +15,7 @@ import { LoginDto, RegisterDto } from 'src/auth/schema';
 
 import { UsersService } from 'src/users/users.service';
 import { DatabaseService } from 'src/database/database.service';
+import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 @Injectable()
 export class AuthService {
@@ -22,6 +23,7 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private prisma: DatabaseService,
+    private activityLogsService: ActivityLogsService,
   ) {}
 
   async login(
@@ -87,6 +89,11 @@ export class AuthService {
   async register({ email, name, password }: RegisterDto, response: Response) {
     try {
       const user = await this.usersService.create({ email, name, password });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'USER_REGISTERED',
+        user: { connect: { id: user.id } },
+      });
 
       const payload = { id: user.id };
       const accessToken = await this.jwtService.signAsync(payload, {
@@ -187,9 +194,27 @@ export class AuthService {
 
     const hashedPwd = await bcrypt.hash(newPassword, 10);
 
-    return this.prisma.user.update({
+    const res = await this.prisma.user.update({
       where: { id: userId },
       data: { password: hashedPwd },
     });
+
+    await this.activityLogsService.createActivityLog({
+      action: 'USER_CHANGED_PASSWORD',
+      user: { connect: { id: userId } },
+    });
+
+    return res;
+  }
+
+  async updateProfile(id: string, data: Prisma.UserUpdateInput): Promise<User> {
+    const user = await this.prisma.user.update({ where: { id }, data });
+
+    await this.activityLogsService.createActivityLog({
+      action: 'USER_UPDATED_PROFILE',
+      user: { connect: { id } },
+    });
+
+    return user;
   }
 }

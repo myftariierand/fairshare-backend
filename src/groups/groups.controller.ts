@@ -96,4 +96,9 @@ export class GroupsController {
   ) {
     return this.groupsService.removeMember(userId, groupId, memberId);
   }
+
+  @Delete(':groupId/leave')
+  leaveGroup(@UserId() userId, @Param('groupId') groupId) {
+    return this.groupsService.leaveGroup(userId, groupId);
+  }
 }

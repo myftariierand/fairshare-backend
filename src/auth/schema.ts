@@ -26,3 +26,7 @@ export const RegisterSchema = z
   });
 
 export class RegisterDto extends createZodDto(RegisterSchema) {}
+
+const UpdateProfileSchema = z.object({ name: z.string() });
+
+export class UpdateProfileDto extends createZodDto(UpdateProfileSchema) {}

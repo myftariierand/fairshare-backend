@@ -23,6 +23,8 @@ model User {
   createdTransactions Transaction[]      @relation("CreatedBy")
   paidTransactions    Transaction[]      @relation("PaidBy")
   transactionSplits   TransactionSplit[]
+  activityLog         ActivityLog[]
+  targetActivityLog   ActivityLog[]      @relation("TargetUser")
 }
 
 model Group {
@@ -36,6 +38,7 @@ model Group {
   invitations  GroupInvitation[]
   members      GroupMember[]
   transactions Transaction[]
+  activityLog  ActivityLog[]
 }
 
 model GroupMember {
@@ -75,9 +78,10 @@ model Transaction {
   paidById    String
   createdById String
   createdBy   User               @relation("CreatedBy", fields: [createdById], references: [id])
-  group       Group              @relation(fields: [groupId], references: [id])
+  group       Group              @relation(fields: [groupId], references: [id], onDelete: Cascade)
   paidBy      User               @relation("PaidBy", fields: [paidById], references: [id])
   splits      TransactionSplit[]
+  activityLog ActivityLog[]
 }
 
 model TransactionSplit {
@@ -104,6 +108,25 @@ model Friendships {
   @@unique([senderId, receiverId])
 }
 
+model ActivityLog {
+  id            String         @id @default(uuid())
+  createdAt     DateTime       @default(now())
+  action        ActivityAction
+  snapshot      Json?
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  groupId       String?
+  group         Group?         @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  transactionId String?
+  transaction   Transaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  targetUserId  String?
+  targetUser    User?          @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([groupId])
+  @@index([transactionId])
+}
+
 enum FriendshipStatus {
   PENDING
   ACCEPTED
@@ -119,4 +142,28 @@ enum InvitationStatus {
 enum TransactionType {
   EXPENSE
   SETTLEMENT
+}
+
+enum ActivityAction {
+  USER_REGISTERED
+  USER_UPDATED_PROFILE
+  USER_CHANGED_PASSWORD
+  FRIENDSHIP_REQUEST_SENT
+  FRIENDSHIP_REQUEST_ACCEPTED
+  FRIENDSHIP_REQUEST_REJECTED
+  FRIENDSHIP_REQUEST_CANCELLED
+  FRIENDSHIP_REMOVED
+  GROUP_CREATED
+  GROUP_UPDATED
+  GROUP_DELETED
+  GROUP_MEMBER_JOINED
+  GROUP_MEMBER_LEFT
+  GROUP_MEMBER_REMOVED
+  GROUP_INVITATION_SENT
+  GROUP_INVITATION_ACCEPTED
+  GROUP_INVITATION_REJECTED
+  TRANSACTION_CREATED
+  TRANSACTION_UPDATED
+  TRANSACTION_DELETED
+  TRANSACTION_SETTLED
 }
