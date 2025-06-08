@@ -83,7 +83,10 @@ export class AuthController {
   }
 
   @Post('update-profile')
-  async updateProfile(@UserId() userId, body: UpdateProfileDto): Promise<User> {
+  async updateProfile(
+    @UserId() userId,
+    @Body() body: UpdateProfileDto,
+  ): Promise<User> {
     return this.authService.updateProfile(userId, body);
   }
 }
