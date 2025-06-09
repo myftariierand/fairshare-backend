@@ -19,12 +19,12 @@ export class ActivityLogsService {
         { targetUserId: userId },
         { group: { members: { some: { userId } } } },
         { transaction: { group: { members: { some: { userId } } } } },
-        // {
-        //   snapshot: {
-        //     path: ['group', 'members'],
-        //     array_contains: [{ userId }],
-        //   },
-        // },
+        {
+          snapshot: {
+            path: ['group', 'members'],
+            array_contains: [{ userId }],
+          },
+        },
       ],
     };
 
@@ -33,9 +33,9 @@ export class ActivityLogsService {
         where,
       }),
       this.prisma.activityLog.findMany({
-        // where,
-        // take: pageSize,
-        // skip: (page - 1) * pageSize,
+        where,
+        take: pageSize,
+        skip: (page - 1) * pageSize,
         orderBy: {
           createdAt: 'desc',
         },
