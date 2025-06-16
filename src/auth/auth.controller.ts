@@ -7,7 +7,9 @@ import {
   Post,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 
 import { AuthService } from 'src/auth/auth.service';
@@ -88,5 +90,26 @@ export class AuthController {
     @Body() body: UpdateProfileDto,
   ): Promise<User> {
     return this.authService.updateProfile(userId, body);
+  }
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  @Public()
+  async googleAuth() {
+    // Guard redirects to Google
+  }
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  @Public()
+  async googleAuthCallback(@Req() req, @Res() res: Response) {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Google authentication failed.' });
+    }
+
+    const token = await this.authService.generateJwt(req.user);
+    const redirectUrl = `${process.env.CLIENT_ORIGIN}/callback?token=${token}`;
+
+    return res.redirect(redirectUrl);
   }
 }

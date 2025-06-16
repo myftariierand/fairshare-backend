@@ -25,6 +25,7 @@ model User {
   transactionSplits   TransactionSplit[]
   activityLog         ActivityLog[]
   targetActivityLog   ActivityLog[]      @relation("TargetUser")
+  provider  String   @default("local")
 }
 
 model Group {

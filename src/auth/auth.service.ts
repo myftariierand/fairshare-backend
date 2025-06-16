@@ -180,16 +180,19 @@ export class AuthService {
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isGoogleUser = await bcrypt.compare('', user.password);
 
-    if (!isPasswordValid) {
-      throw new HttpException(
-        {
-          status: HttpStatus.UNAUTHORIZED,
-          message: 'Invalid password',
-        },
-        HttpStatus.UNAUTHORIZED,
-      );
+    if (!isGoogleUser) {
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        throw new HttpException(
+          {
+            status: HttpStatus.UNAUTHORIZED,
+            message: 'Invalid password',
+          },
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
     }
 
     const hashedPwd = await bcrypt.hash(newPassword, 10);
@@ -216,5 +219,13 @@ export class AuthService {
     });
 
     return user;
+  }
+
+  async generateJwt(user: User): Promise<string> {
+    const payload = { id: user.id };
+    return this.jwtService.signAsync(payload, {
+      secret: process.env.ACCESS_TOKEN_SECRET,
+      expiresIn: '15m',
+    });
   }
 }
