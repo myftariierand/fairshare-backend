@@ -15,6 +15,7 @@ import { LoginDto, RegisterDto } from 'src/auth/schema';
 
 import { UsersService } from 'src/users/users.service';
 import { DatabaseService } from 'src/database/database.service';
+import { EmailService } from 'src/email/email.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private prisma: DatabaseService,
+    private emailService: EmailService,
     private activityLogsService: ActivityLogsService,
   ) {}
 
@@ -216,5 +218,76 @@ export class AuthService {
     });
 
     return user;
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.usersService.findUnique({ email });
+
+    if (user) {
+      const resetToken = await this.jwtService.signAsync(
+        { id: user.id },
+        {
+          secret: process.env.RESET_PASSWORD_SECRET,
+          expiresIn: '1h',
+        },
+      );
+
+      await this.emailService.sendPasswordResetEmail(user.email, resetToken);
+    }
+
+    return {
+      message: 'Password reset email sent',
+    };
+  }
+
+  async resetPassword(
+    token: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
+    if (newPassword !== confirmPassword) {
+      throw new HttpException(
+        {
+          status: HttpStatus.BAD_REQUEST,
+          message: 'New password and confirmation do not match',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    try {
+      const decoded = await this.jwtService.verifyAsync(token, {
+        secret: process.env.RESET_PASSWORD_SECRET,
+      });
+
+      const user = await this.usersService.findUnique({ id: decoded.id });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const hashedPwd = await bcrypt.hash(newPassword, 10);
+
+      await this.prisma.user.update({
+        where: { id: decoded.id },
+        data: { password: hashedPwd },
+      });
+
+      return { message: 'Password reset successfully' };
+    } catch (error: any) {
+      throw new ForbiddenException('Invalid or expired token');
+    }
+  }
+
+  async verifyResetToken(token: string) {
+    try {
+      await this.jwtService.verifyAsync(token, {
+        secret: process.env.RESET_PASSWORD_SECRET,
+      });
+
+      return { valid: true };
+    } catch (error: any) {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
   }
 }
