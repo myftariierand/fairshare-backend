@@ -103,6 +103,7 @@ export class AuthController {
   @Get('verify-reset-token')
   async verifyResetToken(@Query() { token }: { token: string }) {
     return this.authService.verifyResetToken(token);
+  }
 
   @Post('update-profile')
   async updateProfile(
