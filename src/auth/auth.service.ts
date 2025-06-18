@@ -69,6 +69,7 @@ export class AuthService {
       const res = await this.jwtService.verifyAsync(refreshToken, {
         secret: process.env.REFRESH_TOKEN_SECRET,
       });
+
       const payload = { id: res.id };
       const accessToken = await this.jwtService.signAsync(payload, {
         secret: process.env.ACCESS_TOKEN_SECRET,
@@ -227,5 +228,26 @@ export class AuthService {
       secret: process.env.ACCESS_TOKEN_SECRET,
       expiresIn: '15m',
     });
+  }
+
+  async googleLogin(user: User, res: Response) {
+    if (!user) {
+      return res.status(401).json({ message: 'Google authentication failed.' });
+    }
+
+    const payload = { id: user.id };
+    const refreshToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.REFRESH_TOKEN_SECRET,
+      expiresIn: '7d',
+    });
+
+    res.cookie('jwt', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'none',
+    });
+
+    return res.redirect(process.env.CLIENT_ORIGIN + '/callback');
   }
 }

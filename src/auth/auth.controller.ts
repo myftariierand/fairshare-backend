@@ -103,13 +103,6 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   @Public()
   async googleAuthCallback(@Req() req, @Res() res: Response) {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Google authentication failed.' });
-    }
-
-    const token = await this.authService.generateJwt(req.user);
-    const redirectUrl = `${process.env.CLIENT_ORIGIN}/callback?token=${token}`;
-
-    return res.redirect(redirectUrl);
+    this.authService.googleLogin(req.user, res);
   }
 }
