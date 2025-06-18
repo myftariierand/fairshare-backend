@@ -14,6 +14,7 @@ import { GroupsModule } from 'src/groups/groups.module';
 import { FriendshipsModule } from 'src/friendships/friendships.module';
 import { TransactionsModule } from 'src/transactions/transactions.module';
 import { EmailModule } from 'src/email/email.module';
+import { ActivityLogsModule } from 'src/activity-logs/activity.module';
 
 import { AuthGuard } from 'src/auth/auth.guard';
 
@@ -62,6 +63,7 @@ import { AuthGuard } from 'src/auth/auth.guard';
     GroupsModule,
     FriendshipsModule,
     TransactionsModule,
+    ActivityLogsModule,
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

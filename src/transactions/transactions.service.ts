@@ -7,6 +7,7 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
+import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -15,6 +16,7 @@ export class TransactionsService {
   constructor(
     private sse: SseService,
     private prisma: DatabaseService,
+    private activityLogsService: ActivityLogsService,
   ) {}
 
   async findTransactions(userId: string, groupId: string) {
@@ -97,7 +99,8 @@ export class TransactionsService {
     const allUsersAreMembers = userIds.every((userId) =>
       groupMembersIds.includes(userId),
     );
-    if (allUsersAreMembers)
+
+    if (!allUsersAreMembers)
       throw new ForbiddenException('All users should be members of the group');
 
     const transaction = await this.prisma.transaction.create({
@@ -123,6 +126,14 @@ export class TransactionsService {
           createMany: { data: splits },
         },
       },
+    });
+
+    await this.activityLogsService.createActivityLog({
+      action: 'TRANSACTION_CREATED',
+      snapshot: { group: foundGroup, transaction },
+      user: { connect: { id: userId } },
+      group: { connect: { id: groupId } },
+      transaction: { connect: { id: transaction.id } },
     });
 
     const member = foundGroup.members.find(
@@ -172,6 +183,14 @@ export class TransactionsService {
       },
     });
 
+    await this.activityLogsService.createActivityLog({
+      action: 'TRANSACTION_UPDATED',
+      snapshot: { group: foundGroup, transaction },
+      user: { connect: { id: userId } },
+      group: { connect: { id: groupId } },
+      transaction: { connect: { id: transaction.id } },
+    });
+
     const receivers = groupMemebersIds.filter((id) => id !== userId);
     const updater = foundGroup.members.find(
       (member) => member.userId === userId,
@@ -190,7 +209,16 @@ export class TransactionsService {
     try {
       const transaction = await this.prisma.transaction.delete({
         where: { id, splits: { some: { userId } } },
-        include: { splits: { include: { user: true } } },
+        include: { group: true, splits: { include: { user: true } } },
+      });
+
+      const { group, ...rest } = transaction;
+
+      await this.activityLogsService.createActivityLog({
+        action: 'TRANSACTION_DELETED',
+        snapshot: { group, transaction: rest },
+        user: { connect: { id: userId } },
+        group: { connect: { id: transaction.group.id } },
       });
 
       const receivers = transaction.splits
@@ -243,6 +271,13 @@ export class TransactionsService {
           createdBy: true,
           paidBy: true,
         },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'TRANSACTION_SETTLED',
+        user: { connect: { id: userId } },
+        targetUser: { connect: { id: paidBy } },
+        snapshot: { group: res.group },
       });
 
       const membersIds = res.group.members.map(({ userId }) => userId);

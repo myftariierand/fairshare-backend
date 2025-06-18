@@ -14,10 +14,11 @@ import { Response } from 'express';
 import { AuthService } from 'src/auth/auth.service';
 import { Cookies, Public } from 'src/auth/auth.decorators';
 
-import { LoginDto, RegisterDto } from 'src/auth/schema';
+import { LoginDto, RegisterDto, UpdateProfileDto } from 'src/auth/schema';
 import { UserDto } from 'src/schema/user';
 import { ZodSerializerDto } from 'nestjs-zod';
 import { User } from '@prisma/client';
+import { UserId } from 'src/users/user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -102,5 +103,12 @@ export class AuthController {
   @Get('verify-reset-token')
   async verifyResetToken(@Query() { token }: { token: string }) {
     return this.authService.verifyResetToken(token);
+
+  @Post('update-profile')
+  async updateProfile(
+    @UserId() userId,
+    @Body() body: UpdateProfileDto,
+  ): Promise<User> {
+    return this.authService.updateProfile(userId, body);
   }
 }

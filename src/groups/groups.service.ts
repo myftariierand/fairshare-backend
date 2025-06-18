@@ -6,10 +6,11 @@ import {
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Group, Prisma } from '@prisma/client';
 
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
+import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -18,6 +19,7 @@ export class GroupsService {
   constructor(
     private sse: SseService,
     private prisma: DatabaseService,
+    private activityLogsService: ActivityLogsService,
   ) {}
 
   calculateBalances(
@@ -161,7 +163,7 @@ export class GroupsService {
     userId: string,
     groupCreateInput: Prisma.GroupCreateWithoutCreatedByInput,
   ) {
-    await this.prisma.group.create({
+    const group = await this.prisma.group.create({
       data: {
         ...groupCreateInput,
         createdBy: {
@@ -185,6 +187,15 @@ export class GroupsService {
         },
       },
     });
+
+    await this.activityLogsService.createActivityLog({
+      action: 'GROUP_CREATED',
+      snapshot: { group },
+      user: { connect: { id: userId } },
+      group: { connect: { id: group.id } },
+    });
+
+    return group;
   }
 
   async update(
@@ -200,6 +211,13 @@ export class GroupsService {
         },
         data: updateGroupDto,
         include: { members: { include: { user: true } } },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_UPDATED',
+        snapshot: { group: response },
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
       });
 
       const memebersIds = response.members
@@ -233,6 +251,14 @@ export class GroupsService {
         include: { createdBy: true, members: { where: { NOT: { userId } } } },
       });
 
+      console.log(response);
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_DELETED',
+        snapshot: { group: response },
+        user: { connect: { id: userId } },
+      });
+
       const membersIds = response.members.map((member) => member.userId);
 
       this.sse.emit(
@@ -243,6 +269,8 @@ export class GroupsService {
 
       return response;
     } catch (error) {
+      console.log(error);
+
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         throw new HttpException(
           {
@@ -281,6 +309,14 @@ export class GroupsService {
           group: true,
           sender: true,
         },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_INVITATION_SENT',
+        snapshot: { group: response.group },
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
+        targetUser: { connect: { id: receiverId } },
       });
 
       this.sse.emit(
@@ -340,6 +376,13 @@ export class GroupsService {
         include: { receiver: true },
       });
 
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_INVITATION_ACCEPTED',
+        snapshot: { group },
+        user: { connect: { id: invitation.receiverId } },
+        group: { connect: { id: groupId } },
+      });
+
       const membersIds = group.members
         .filter(
           (member) =>
@@ -360,7 +403,7 @@ export class GroupsService {
         `${invitation.receiver.name} joined ${group.name}`,
       );
 
-      return { success: true };
+      return group;
     } catch (error) {
       console.log(error);
     }
@@ -374,6 +417,13 @@ export class GroupsService {
           status: 'PENDING',
         },
         include: { receiver: true, group: true },
+      });
+
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_INVITATION_REJECTED',
+        snapshot: { group: invite.group },
+        user: { connect: { id: invite.receiverId } },
+        group: { connect: { id: invite.groupId } },
       });
 
       this.sse.emit(
@@ -415,6 +465,13 @@ export class GroupsService {
         },
       });
 
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_MEMBER_JOINED',
+        snapshot: { group },
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
+      });
+
       const membersIds = group.members
         .filter((member) => member.userId !== userId)
         .map(({ userId }) => userId);
@@ -427,7 +484,7 @@ export class GroupsService {
         `${member?.user.name} joined ${group.name}`,
       );
 
-      return { success: true };
+      return group;
     } catch (error) {
       console.log(error);
     }
@@ -462,7 +519,7 @@ export class GroupsService {
 
       const balances = this.calculateBalances(transactions);
 
-      if (balances[memberId].balance !== 0) {
+      if (balances.memberId && balances[memberId].balance !== 0) {
         throw new ForbiddenException(
           'This member cannot be removed until all balances are settled.',
         );
@@ -504,6 +561,14 @@ export class GroupsService {
         },
       });
 
+      await this.activityLogsService.createActivityLog({
+        action: 'GROUP_MEMBER_REMOVED',
+        snapshot: { group: updatedGroup },
+        user: { connect: { id: userId } },
+        group: { connect: { id: groupId } },
+        targetUser: { connect: { id: memberId } },
+      });
+
       const membersIds = updatedGroup.members
         .filter((member) => member.userId !== memberId)
         .map(({ userId }) => userId);
@@ -520,10 +585,54 @@ export class GroupsService {
         `${member.user.name} removed from ${updatedGroup.name}`,
       );
 
-      return { success: true };
+      return updatedGroup;
     } catch (error) {
       console.log(error);
       throw error;
     }
+  }
+
+  async leaveGroup(userId: string, groupId: string): Promise<Group> {
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        groupId,
+        OR: [{ paidById: userId }, { splits: { some: { userId: userId } } }],
+      },
+      include: {
+        splits: {
+          include: { user: { select: { id: true, name: true } } },
+        },
+        paidBy: { select: { id: true, name: true } },
+      },
+    });
+
+    const balances = this.calculateBalances(transactions);
+
+    if (balances.memberId && balances[userId].balance !== 0) {
+      throw new ForbiddenException(
+        'You cannot leave this group until all balances are settled.',
+      );
+    }
+
+    const member = await this.prisma.groupMember.delete({
+      where: { groupId_userId: { groupId, userId } },
+      include: { group: true },
+    });
+
+    await this.prisma.groupInvitation.deleteMany({
+      where: {
+        receiverId: userId,
+        groupId: groupId,
+      },
+    });
+
+    await this.activityLogsService.createActivityLog({
+      action: 'GROUP_MEMBER_LEFT',
+      snapshot: { group: member.group },
+      user: { connect: { id: userId } },
+      group: { connect: { id: groupId } },
+    });
+
+    return member.group;
   }
 }
