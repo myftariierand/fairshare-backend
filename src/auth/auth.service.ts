@@ -248,6 +248,6 @@ export class AuthService {
       sameSite: 'none',
     });
 
-    return res.redirect(process.env.CLIENT_ORIGIN + '/callback');
+    return res.redirect(process.env.CLIENT_ORIGIN || '/');
   }
 }
