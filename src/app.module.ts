@@ -21,22 +21,38 @@ import { AuthGuard } from 'src/auth/auth.guard';
   imports: [
     ConfigModule.forRoot(),
     EmailModule,
-    MailerModule.forRoot({
-      transport: {
-        host: 'localhost',
-        port: 1025,
-        ignoreTLS: true,
-        secure: false,
-      },
-      defaults: {
-        from: '"FairShare" <no-reply@fairshare.local>',
-      },
-      template: {
-        dir: join(__dirname, '..', 'templates'),
-        adapter: new HandlebarsAdapter(),
-        options: {
-          strict: true,
-        },
+    MailerModule.forRootAsync({
+      useFactory: async () => {
+        const isProd = process.env.NODE_ENV === 'production';
+
+        return {
+          transport: isProd
+            ? {
+                service: 'gmail',
+                auth: {
+                  user: process.env.MAIL_USER,
+                  pass: process.env.MAIL_PASS,
+                },
+              }
+            : {
+                host: 'localhost',
+                port: 1025,
+                ignoreTLS: true,
+                secure: false,
+              },
+          defaults: {
+            from: isProd
+              ? '"FairShare" <myftariierand@gmail.com>'
+              : '"FairShare" <no-reply@fairshare.local>',
+          },
+          template: {
+            dir: join(__dirname, '..', 'templates'),
+            adapter: new HandlebarsAdapter(),
+            options: {
+              strict: true,
+            },
+          },
+        };
       },
     }),
     DatabaseModule,
