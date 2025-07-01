@@ -29,10 +29,12 @@ import { AuthGuard } from 'src/auth/auth.guard';
         return {
           transport: isProd
             ? {
-                service: 'gmail',
+                host: 'smtp.sendgrid.net',
+                port: 587,
+                secure: false,
                 auth: {
-                  user: process.env.MAIL_USER,
-                  pass: process.env.MAIL_PASS,
+                  user: 'apikey',
+                  pass: process.env.SENDGRID_API_KEY,
                 },
               }
             : {
