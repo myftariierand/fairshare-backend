@@ -71,6 +71,7 @@ export class AuthService {
       const res = await this.jwtService.verifyAsync(refreshToken, {
         secret: process.env.REFRESH_TOKEN_SECRET,
       });
+
       const payload = { id: res.id };
       const accessToken = await this.jwtService.signAsync(payload, {
         secret: process.env.ACCESS_TOKEN_SECRET,
@@ -182,16 +183,19 @@ export class AuthService {
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isGoogleUser = await bcrypt.compare('', user.password);
 
-    if (!isPasswordValid) {
-      throw new HttpException(
-        {
-          status: HttpStatus.UNAUTHORIZED,
-          message: 'Invalid password',
-        },
-        HttpStatus.UNAUTHORIZED,
-      );
+    if (!isGoogleUser) {
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        throw new HttpException(
+          {
+            status: HttpStatus.UNAUTHORIZED,
+            message: 'Invalid password',
+          },
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
     }
 
     const hashedPwd = await bcrypt.hash(newPassword, 10);
@@ -220,6 +224,35 @@ export class AuthService {
     return user;
   }
 
+  async generateJwt(user: User): Promise<string> {
+    const payload = { id: user.id };
+    return this.jwtService.signAsync(payload, {
+      secret: process.env.ACCESS_TOKEN_SECRET,
+      expiresIn: '15m',
+    });
+  }
+
+  async googleLogin(user: User, res: Response) {
+    if (!user) {
+      return res.status(401).json({ message: 'Google authentication failed.' });
+    }
+
+    const payload = { id: user.id };
+    const refreshToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.REFRESH_TOKEN_SECRET,
+      expiresIn: '7d',
+    });
+
+    res.cookie('jwt', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'none',
+    });
+
+    return res.redirect(process.env.CLIENT_ORIGIN || '/');
+  }
+  
   async forgotPassword(email: string) {
     const user = await this.usersService.findUnique({ email });
 

@@ -8,7 +8,9 @@ import {
   Query,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { Response } from 'express';
 
 import { AuthService } from 'src/auth/auth.service';
@@ -111,5 +113,19 @@ export class AuthController {
     @Body() body: UpdateProfileDto,
   ): Promise<User> {
     return this.authService.updateProfile(userId, body);
+  }
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  @Public()
+  async googleAuth() {
+    // Guard redirects to Google
+  }
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  @Public()
+  async googleAuthCallback(@Req() req, @Res() res: Response) {
+    this.authService.googleLogin(req.user, res);
   }
 }
