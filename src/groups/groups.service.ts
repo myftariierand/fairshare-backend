@@ -11,6 +11,7 @@ import { Group, Prisma } from '@prisma/client';
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -20,6 +21,7 @@ export class GroupsService {
     private sse: SseService,
     private prisma: DatabaseService,
     private activityLogsService: ActivityLogsService,
+    private cloudinaryService: CloudinaryService,
   ) {}
 
   calculateBalances(
@@ -162,7 +164,13 @@ export class GroupsService {
   async create(
     userId: string,
     groupCreateInput: Prisma.GroupCreateWithoutCreatedByInput,
+    coverImage: Express.Multer.File,
   ) {
+    if (coverImage) {
+      const uploadResult = await this.cloudinaryService.uploadFile(coverImage);
+      groupCreateInput.cover = uploadResult.public_id;
+    }
+
     const group = await this.prisma.group.create({
       data: {
         ...groupCreateInput,
@@ -202,8 +210,24 @@ export class GroupsService {
     userId: string,
     groupId: string,
     updateGroupDto: Prisma.GroupUpdateInput,
+    newCover: Express.Multer.File,
   ) {
     try {
+      const foundGroup = await this.prisma.group.findUnique({
+        where: { id: groupId, members: { some: { userId } } },
+      });
+
+      if (!foundGroup)
+        throw new NotFoundException({ message: 'Group not found!' });
+
+      if (newCover) {
+        if (foundGroup.cover)
+          await this.cloudinaryService.deleteFile(foundGroup.cover);
+
+        const uploadResult = await this.cloudinaryService.uploadFile(newCover);
+        updateGroupDto.cover = uploadResult.public_id;
+      }
+
       const response = await this.prisma.group.update({
         where: {
           id: groupId,

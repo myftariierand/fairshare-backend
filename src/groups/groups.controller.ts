@@ -7,7 +7,10 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 import { GroupsService } from 'src/groups/groups.service';
 
@@ -50,17 +53,24 @@ export class GroupsController {
   }
 
   @Post()
-  createGroup(@UserId() userId, @Body() createGroupDto: CreateGroupDto) {
-    return this.groupsService.create(userId, createGroupDto);
+  @UseInterceptors(FileInterceptor('cover'))
+  createGroup(
+    @UserId() userId,
+    @Body() createGroupDto: CreateGroupDto,
+    @UploadedFile() cover: Express.Multer.File,
+  ) {
+    return this.groupsService.create(userId, createGroupDto, cover);
   }
 
   @Patch(':groupId')
+  @UseInterceptors(FileInterceptor('cover'))
   updateGroup(
     @UserId() userId,
     @Param() { groupId }: UpdateParamsDto,
     @Body() updateGroupDto: UpdateGroupDto,
+    @UploadedFile() cover: Express.Multer.File,
   ) {
-    return this.groupsService.update(userId, groupId, updateGroupDto);
+    return this.groupsService.update(userId, groupId, updateGroupDto, cover);
   }
 
   @Delete(':groupId')
