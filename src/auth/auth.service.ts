@@ -53,13 +53,13 @@ export class AuthService {
     });
     const refreshToken = await this.jwtService.signAsync(payload, {
       secret: process.env.REFRESH_TOKEN_SECRET,
-      expiresIn: '7d',
+      expiresIn: '180d',
     });
 
     response.cookie('jwt', refreshToken, {
       httpOnly: true,
       secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 180 * 24 * 60 * 60 * 1000,
       sameSite: 'none',
     });
 
@@ -105,7 +105,7 @@ export class AuthService {
       });
       const refreshToken = await this.jwtService.signAsync(payload, {
         secret: process.env.REFRESH_TOKEN_SECRET,
-        expiresIn: '7d',
+        expiresIn: '180d',
       });
 
       response.cookie('jwt', refreshToken, {
@@ -240,7 +240,7 @@ export class AuthService {
     const payload = { id: user.id };
     const refreshToken = await this.jwtService.signAsync(payload, {
       secret: process.env.REFRESH_TOKEN_SECRET,
-      expiresIn: '7d',
+      expiresIn: '180d',
     });
 
     res.cookie('jwt', refreshToken, {
@@ -252,7 +252,7 @@ export class AuthService {
 
     return res.redirect(process.env.CLIENT_ORIGIN || '/');
   }
-  
+
   async forgotPassword(email: string) {
     const user = await this.usersService.findUnique({ email });
 
