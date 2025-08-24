@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
@@ -10,6 +11,8 @@ import { DatabaseService } from 'src/database/database.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 import { SseEventType } from 'src/types/sse';
+
+import { toMinorUnit } from 'src/helpers/conversion-helpers';
 
 @Injectable()
 export class TransactionsService {
@@ -43,10 +46,10 @@ export class TransactionsService {
           paidById === userId
             ? splits.reduce(
                 (sum, split) =>
-                  sum + (split.userId !== userId ? split.amount : 0),
+                  sum + (split.userId !== userId ? split.amount.toNumber() : 0),
                 0,
               )
-            : -(userSplit?.amount ?? 0);
+            : -(userSplit?.amount.toNumber() ?? 0);
 
         return {
           id,
@@ -62,19 +65,29 @@ export class TransactionsService {
   }
 
   async findTransactionById(userId: string, id: string) {
-    return this.prisma.transaction.findUnique({
-      where: {
-        id,
-        splits: { some: { userId } },
-      },
-      include: {
-        paidBy: true,
-        createdBy: true,
-        splits: {
-          include: { user: true },
+    try {
+      const transaction = await this.prisma.transaction.findUnique({
+        where: {
+          id,
+          group: { members: { some: { userId } } },
         },
-      },
-    });
+        include: {
+          paidBy: true,
+          createdBy: true,
+          splits: {
+            include: { user: true },
+          },
+        },
+      });
+
+      if (!transaction) throw new NotFoundException();
+
+      return transaction;
+    } catch (error) {
+      throw new InternalServerErrorException('Something Went Wrong', {
+        cause: error,
+      });
+    }
   }
 
   async createTransaction(
@@ -99,9 +112,19 @@ export class TransactionsService {
     const allUsersAreMembers = userIds.every((userId) =>
       groupMembersIds.includes(userId),
     );
-
     if (!allUsersAreMembers)
       throw new ForbiddenException('All users should be members of the group');
+
+    const unitAmount = toMinorUnit(amount, foundGroup.currency);
+    const splitsTotal = splits.reduce(
+      (acc, curr) => acc + toMinorUnit(curr.amount, foundGroup.currency),
+      0,
+    );
+
+    if (splitsTotal !== unitAmount)
+      throw new ForbiddenException(
+        'The sum of the splits must be equal to total amount',
+      );
 
     const transaction = await this.prisma.transaction.create({
       data: {
