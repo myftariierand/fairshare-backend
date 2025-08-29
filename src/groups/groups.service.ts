@@ -171,9 +171,10 @@ export class GroupsService {
       }
     }
 
-    simplified = simplified.filter((b) => b.amount > 0);
-
-    return simplified;
+    return simplified
+      .map((b) => ({ ...b, amount: b.amount.toFixed(2) }))
+      .filter((b) => +b.amount > 0)
+      .map((b) => ({ ...b, amount: +b.amount }));
   }
 
   async findMany(userId: string) {
