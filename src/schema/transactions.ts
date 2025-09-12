@@ -26,37 +26,17 @@ export class UpdateTransactionParamsDto extends createZodDto(
   UpdateTransactionParamsSchema,
 ) {}
 
-const UpdateTransactionSchema = z
-  .object({
-    groupId: z.string().uuid(),
-    amount: z.number().positive(),
-    description: z.string().min(4),
-    splits: z
-      .array(
-        z.object({
-          userId: z.string().uuid(),
-          amount: z.number().positive(),
-        }),
-      )
-      .min(1),
-  })
-  .refine(
-    ({ amount, splits }) => {
-      if (splits?.length) {
-        const splitsAmount = splits.reduce(
-          (acc, split) => (acc += split.amount),
-          0,
-        );
-
-        const difference = Math.abs(amount - splitsAmount);
-
-        return difference < 0.02;
-      }
-    },
-    {
-      message: 'The sum of all splits should be equal to total amount',
-    },
-  );
+const UpdateTransactionSchema = z.object({
+  groupId: z.string().uuid(),
+  amount: z.number().positive(),
+  description: z.string().min(4),
+  splits: z.array(
+    z.object({
+      userId: z.string().uuid(),
+      amount: z.number().positive(),
+    }),
+  ),
+});
 
 export class UpdateTransactionDto extends createZodDto(
   UpdateTransactionSchema,

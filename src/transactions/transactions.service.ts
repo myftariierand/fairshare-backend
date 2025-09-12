@@ -190,6 +190,17 @@ export class TransactionsService {
     if (!groupMemebersIds.includes(userId))
       throw new ForbiddenException('You are not a member of this group');
 
+    const unitAmount = toMinorUnit(amount, foundGroup.currency);
+    const splitsTotal = splits.reduce(
+      (acc, curr) => acc + toMinorUnit(curr.amount, foundGroup.currency),
+      0,
+    );
+
+    if (splitsTotal !== unitAmount)
+      throw new ForbiddenException(
+        'The sum of the splits must be equal to total amount',
+      );
+
     const updatedSplits = splits.map(({ userId, amount }) => ({
       where: { userId },
       data: { amount },
