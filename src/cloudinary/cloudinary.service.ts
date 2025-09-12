@@ -18,6 +18,20 @@ export class CloudinaryService {
     });
   }
 
+  async uploadBuffer(
+    buffer: Buffer,
+    folder: string = 'group',
+  ): Promise<CloudinaryResponse> {
+    return new Promise<CloudinaryResponse>((resolve, reject) => {
+      cloudinary.uploader
+        .upload_stream({ folder }, (error, result) => {
+          if (error || result === undefined) return reject(error);
+          resolve(result);
+        })
+        .end(buffer);
+    });
+  }
+
   async deleteFile(publicId: string): Promise<CloudinaryResponse> {
     return new Promise<CloudinaryResponse>((resolve, reject) => {
       cloudinary.uploader.destroy(publicId, (error, result) => {

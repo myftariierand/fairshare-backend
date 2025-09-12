@@ -14,6 +14,7 @@ import { ActivityLogsService } from 'src/activity-logs/activity.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 
 import { SseEventType } from 'src/types/sse';
+import * as sharp from 'sharp';
 
 type Balance = {
   from: {
@@ -312,8 +313,24 @@ export class GroupsService {
         if (foundGroup.cover)
           await this.cloudinaryService.deleteFile(foundGroup.cover);
 
-        const uploadResult = await this.cloudinaryService.uploadFile(newCover);
-        updateGroupDto.cover = uploadResult.public_id;
+        try {
+          const processedBuffer = await sharp(newCover.buffer)
+            .webp({
+              quality: 90,
+            })
+            .resize(192, 192, { fit: 'cover', withoutEnlargement: true })
+            .toBuffer();
+
+          const uploadResult = await this.cloudinaryService.uploadBuffer(
+            processedBuffer,
+            'group',
+          );
+          updateGroupDto.cover = uploadResult.public_id;
+        } catch (imgErr) {
+          const uploadResult =
+            await this.cloudinaryService.uploadFile(newCover);
+          updateGroupDto.cover = uploadResult.public_id;
+        }
       }
 
       const response = await this.prisma.group.update({
