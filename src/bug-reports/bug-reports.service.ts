@@ -13,26 +13,30 @@ export class BugReportsService {
   ) {}
 
   async create(data: CreateBugReportDto) {
-    const bug = await this.prisma.bugReport.create({
-      data,
-    });
+    try {
+      const bug = await this.prisma.bugReport.create({
+        data,
+      });
 
-    await this.mailerService.sendMail({
-      to: 'myftarierand@gmail.com',
-      subject: `New Bug Report - ${bug.severity}`,
-      template: 'bug-report-notification',
-      context: {
-        title: bug.title,
-        description: bug.description,
-        severity: bug.severity,
-        name: bug.name,
-        email: bug.email,
-        device: bug.device,
-        createdAt: bug.createdAt.toISOString(),
-      },
-    });
+      await this.mailerService.sendMail({
+        to: 'myftarierand@gmail.com',
+        subject: `New Bug Report - ${bug.severity}`,
+        template: 'bug-report-notification',
+        context: {
+          title: bug.title,
+          description: bug.description,
+          severity: bug.severity,
+          name: bug.name,
+          email: bug.email,
+          device: bug.device,
+          createdAt: bug.createdAt.toISOString(),
+        },
+      });
 
-    return bug;
+      return bug;
+    } catch (error) {
+      return error;
+    }
   }
 
   async findAll() {
