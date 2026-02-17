@@ -33,8 +33,8 @@ import { AuthGuard } from 'src/auth/auth.guard';
           transport: isProd
             ? {
                 host: 'smtp.gmail.com',
-                port: 587,
-                secure: false,
+                port: 465,
+                secure: true,
                 auth: {
                   user: process.env.GMAIL_USER,
                   pass: process.env.GMAIL_APP_PASSWORD,
@@ -48,7 +48,7 @@ import { AuthGuard } from 'src/auth/auth.guard';
               },
           defaults: {
             from: isProd
-              ? '"FairShare" <myftariierand@gmail.com>'
+              ? '"FairShare" <myftarierand@gmail.com>'
               : '"FairShare" <no-reply@fairshare.local>',
           },
           template: {
