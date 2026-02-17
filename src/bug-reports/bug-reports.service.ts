@@ -18,6 +18,11 @@ export class BugReportsService {
         data,
       });
 
+      console.log('Attempting to send email...');
+      console.log('NODE_ENV:', process.env.NODE_ENV);
+      console.log('GMAIL_USER:', process.env.GMAIL_USER);
+      console.log('GMAIL_PASS SET:', !!process.env.GMAIL_APP_PASSWORD);
+
       await this.mailerService.sendMail({
         to: 'myftarierand@gmail.com',
         subject: `New Bug Report - ${bug.severity}`,
@@ -33,9 +38,12 @@ export class BugReportsService {
         },
       });
 
+      console.log('Email sent successfully!');
+
       return bug;
     } catch (error) {
-      return error;
+      console.error('Email error:', error);
+      throw error;
     }
   }
 
