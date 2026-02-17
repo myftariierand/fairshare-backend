@@ -20,6 +20,10 @@ import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 @Injectable()
 export class AuthService {
+  private readonly REFRESH_TOKEN_EXPIRY_MS = 365 * 24 * 60 * 60 * 1000;
+  private readonly REFRESH_TOKEN_EXPIRY = '365d';
+  private readonly ACCESS_TOKEN_EXPIRY = '15m';
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -49,17 +53,17 @@ export class AuthService {
     const payload = { id: user.id };
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: process.env.ACCESS_TOKEN_SECRET,
-      expiresIn: '15m',
+      expiresIn: this.ACCESS_TOKEN_EXPIRY,
     });
     const refreshToken = await this.jwtService.signAsync(payload, {
       secret: process.env.REFRESH_TOKEN_SECRET,
-      expiresIn: '180d',
+      expiresIn: this.REFRESH_TOKEN_EXPIRY,
     });
 
     response.cookie('jwt', refreshToken, {
       httpOnly: true,
       secure: true,
-      maxAge: 180 * 24 * 60 * 60 * 1000,
+      maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
       sameSite: 'none',
     });
 
@@ -75,7 +79,7 @@ export class AuthService {
       const payload = { id: res.id };
       const accessToken = await this.jwtService.signAsync(payload, {
         secret: process.env.ACCESS_TOKEN_SECRET,
-        expiresIn: '15m',
+        expiresIn: this.ACCESS_TOKEN_EXPIRY,
       });
       return { accessToken };
     } catch (error: any) {
@@ -101,18 +105,18 @@ export class AuthService {
       const payload = { id: user.id };
       const accessToken = await this.jwtService.signAsync(payload, {
         secret: process.env.ACCESS_TOKEN_SECRET,
-        expiresIn: '15m',
+        expiresIn: this.ACCESS_TOKEN_EXPIRY,
       });
       const refreshToken = await this.jwtService.signAsync(payload, {
         secret: process.env.REFRESH_TOKEN_SECRET,
-        expiresIn: '180d',
+        expiresIn: this.REFRESH_TOKEN_EXPIRY,
       });
 
       response.cookie('jwt', refreshToken, {
         httpOnly: true,
-        secure: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        sameSite: 'none',
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
       });
 
       return { accessToken };
@@ -224,14 +228,6 @@ export class AuthService {
     return user;
   }
 
-  async generateJwt(user: User): Promise<string> {
-    const payload = { id: user.id };
-    return this.jwtService.signAsync(payload, {
-      secret: process.env.ACCESS_TOKEN_SECRET,
-      expiresIn: '15m',
-    });
-  }
-
   async googleLogin(user: User, res: Response) {
     if (!user) {
       return res.status(401).json({ message: 'Google authentication failed.' });
@@ -240,13 +236,13 @@ export class AuthService {
     const payload = { id: user.id };
     const refreshToken = await this.jwtService.signAsync(payload, {
       secret: process.env.REFRESH_TOKEN_SECRET,
-      expiresIn: '180d',
+      expiresIn: this.REFRESH_TOKEN_EXPIRY,
     });
 
     res.cookie('jwt', refreshToken, {
       httpOnly: true,
       secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
       sameSite: 'none',
     });
 

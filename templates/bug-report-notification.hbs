@@ -1,0 +1,79 @@
+<html>
+  <head>
+    <meta charset='UTF-8' />
+    <title>New Bug Report</title>
+    <style>
+      body { font-family: Arial, sans-serif; background-color: #f4f4f5; margin:
+      0; padding: 20px; } .container { max-width: 600px; margin: auto;
+      background: #ffffff; border-radius: 8px; padding: 24px; box-shadow: 0 4px
+      10px rgba(0, 0, 0, 0.05); } .header { font-size: 20px; font-weight: bold;
+      margin-bottom: 16px; } .badge { display: inline-block; padding: 4px 10px;
+      border-radius: 4px; font-size: 12px; font-weight: bold; background-color:
+      #ef4444; color: white; } .section { margin-bottom: 16px; } .label {
+      font-weight: bold; margin-bottom: 4px; } .content { background: #f9fafb;
+      padding: 12px; border-radius: 6px; white-space: pre-wrap; } .footer {
+      margin-top: 24px; font-size: 12px; color: #6b7280; }
+    </style>
+  </head>
+
+  <body>
+    <div class='container'>
+      <div class='header'>
+        🚨 New Bug Report Submitted
+      </div>
+
+      <div class='section'>
+        <div class='label'>Severity</div>
+        <div>
+          <span class='badge'>{{severity}}</span>
+        </div>
+      </div>
+
+      <div class='section'>
+        <div class='label'>Title</div>
+        <div class='content'>
+          {{title}}
+        </div>
+      </div>
+
+      <div class='section'>
+        <div class='label'>Description</div>
+        <div class='content'>
+          {{description}}
+        </div>
+      </div>
+
+      {{#if name}}
+        <div class='section'>
+          <div class='label'>Reported By</div>
+          <div class='content'>
+            {{name}}
+          </div>
+        </div>
+      {{/if}}
+
+      {{#if email}}
+        <div class='section'>
+          <div class='label'>Email</div>
+          <div class='content'>
+            {{email}}
+          </div>
+        </div>
+      {{/if}}
+
+      {{#if device}}
+        <div class='section'>
+          <div class='label'>Device Info</div>
+          <div class='content'>
+            {{device}}
+          </div>
+        </div>
+      {{/if}}
+
+      <div class='footer'>
+        Submitted at:
+        {{createdAt}}
+      </div>
+    </div>
+  </body>
+</html>

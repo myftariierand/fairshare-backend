@@ -169,3 +169,33 @@ enum ActivityAction {
   TRANSACTION_DELETED
   TRANSACTION_SETTLED
 }
+
+model BugReport {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  severity    Severity @default(MINOR)
+
+  name   String?
+  email  String?
+  device String?
+
+  status BugStatus @default(OPEN)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Severity {
+  CRITICAL
+  MAJOR
+  MINOR
+  COSMETIC
+}
+
+enum BugStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
