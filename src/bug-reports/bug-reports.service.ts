@@ -18,7 +18,7 @@ export class BugReportsService {
     });
 
     await this.mailerService.sendMail({
-      to: 'admin@yourapp.com',
+      to: 'myftarierand@gmail.com',
       subject: `New Bug Report - ${bug.severity}`,
       template: 'bug-report-notification',
       context: {
