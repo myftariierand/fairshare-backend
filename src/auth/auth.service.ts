@@ -150,7 +150,11 @@ export class AuthService {
         HttpStatus.NO_CONTENT,
       );
 
-    response.clearCookie('jwt');
+    response.clearCookie('jwt', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+    });
 
     return { message: 'Cookie cleared' };
   }
