@@ -1,10 +1,7 @@
-import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
-import { MailerModule } from '@nestjs-modules/mailer';
-import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 
 import { DatabaseModule } from 'src/database/database.module';
 import { SseModule } from 'src/sse/sse.module';
@@ -25,42 +22,6 @@ import { AuthGuard } from 'src/auth/auth.guard';
     ConfigModule.forRoot(),
     CloudinaryModule,
     EmailModule,
-    MailerModule.forRootAsync({
-      useFactory: async () => {
-        const isProd = process.env.NODE_ENV === 'production';
-
-        return {
-          transport: isProd
-            ? {
-                host: 'smtp.gmail.com',
-                port: 465,
-                secure: true,
-                auth: {
-                  user: process.env.GMAIL_USER,
-                  pass: process.env.GMAIL_APP_PASSWORD,
-                },
-              }
-            : {
-                host: 'localhost',
-                port: 1025,
-                ignoreTLS: true,
-                secure: false,
-              },
-          defaults: {
-            from: isProd
-              ? '"FairShare" <myftarierand@gmail.com>'
-              : '"FairShare" <no-reply@fairshare.local>',
-          },
-          template: {
-            dir: join(__dirname, '..', 'templates'),
-            adapter: new HandlebarsAdapter(),
-            options: {
-              strict: true,
-            },
-          },
-        };
-      },
-    }),
     DatabaseModule,
     SseModule,
     AuthModule,

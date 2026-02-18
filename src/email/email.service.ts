@@ -1,20 +1,34 @@
 import { Injectable } from '@nestjs/common';
-import { MailerService } from '@nestjs-modules/mailer';
+import { Resend } from 'resend';
 
 @Injectable()
 export class EmailService {
-  constructor(private mailerService: MailerService) {}
+  private resend: Resend;
 
-  async sendPasswordResetEmail(to: string, token: string) {
-    const resetUrl = `${process.env.CLIENT_ORIGIN}/reset-password?token=${token}`;
+  constructor() {
+    this.resend = new Resend(process.env.RESEND_API_KEY);
+  }
 
-    return this.mailerService.sendMail({
+  async sendEmail({
+    to,
+    subject,
+    html,
+  }: {
+    to: string | string[];
+    subject: string;
+    html: string;
+  }) {
+    const { data, error } = await this.resend.emails.send({
+      from: 'FairShare <no-reply@fairshare.email>',
       to,
-      subject: 'Reset your password',
-      template: 'auth/reset-password',
-      context: {
-        resetUrl,
-      },
+      subject,
+      html,
     });
+
+    if (error) {
+      throw new Error(`Failed to send email: ${error.message}`);
+    }
+
+    return data;
   }
 }

@@ -18,6 +18,8 @@ import { DatabaseService } from 'src/database/database.service';
 import { EmailService } from 'src/email/email.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
+import { renderTemplate } from 'templates/render-template';
+
 @Injectable()
 export class AuthService {
   private readonly REFRESH_TOKEN_EXPIRY_MS = 365 * 24 * 60 * 60 * 1000;
@@ -261,11 +263,17 @@ export class AuthService {
         },
       );
 
-      await this.emailService.sendPasswordResetEmail(user.email, resetToken);
+      const html = renderTemplate('reset-password', { resetToken });
+
+      await this.emailService.sendEmail({
+        to: user.email,
+        subject: `FairShare Password Reset`,
+        html,
+      });
     }
 
     return {
-      message: 'Password reset email sent',
+      message: 'If the account exists, a reset email has been sent.',
     };
   }
 

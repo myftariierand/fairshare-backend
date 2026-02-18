@@ -1,50 +1,41 @@
 import { Injectable } from '@nestjs/common';
-import { MailerService } from '@nestjs-modules/mailer';
 
 import { DatabaseService } from 'src/database/database.service';
+import { EmailService } from 'src/email/email.service';
 
 import { CreateBugReportDto } from 'src/schema/bug-reports';
+
+import { renderTemplate } from 'templates/render-template';
 
 @Injectable()
 export class BugReportsService {
   constructor(
     private readonly prisma: DatabaseService,
-    private readonly mailerService: MailerService,
+    private readonly emailService: EmailService,
   ) {}
 
   async create(data: CreateBugReportDto) {
-    try {
-      const bug = await this.prisma.bugReport.create({
-        data,
-      });
+    const bug = await this.prisma.bugReport.create({
+      data,
+    });
 
-      console.log('Attempting to send email...');
-      console.log('NODE_ENV:', process.env.NODE_ENV);
-      console.log('GMAIL_USER:', process.env.GMAIL_USER);
-      console.log('GMAIL_PASS SET:', !!process.env.GMAIL_APP_PASSWORD);
+    const html = renderTemplate('bug-report-notification', {
+      title: bug.title,
+      description: bug.description,
+      severity: bug.severity,
+      name: bug.name,
+      email: bug.email,
+      device: bug.device,
+      createdAt: bug.createdAt.toISOString(),
+    });
 
-      await this.mailerService.sendMail({
-        to: 'myftarierand@gmail.com',
-        subject: `New Bug Report - ${bug.severity}`,
-        template: 'bug-report-notification',
-        context: {
-          title: bug.title,
-          description: bug.description,
-          severity: bug.severity,
-          name: bug.name,
-          email: bug.email,
-          device: bug.device,
-          createdAt: bug.createdAt.toISOString(),
-        },
-      });
+    this.emailService.sendEmail({
+      to: 'myftarierand@gmail.com',
+      subject: `New Bug Report - ${bug.severity}`,
+      html,
+    });
 
-      console.log('Email sent successfully!');
-
-      return bug;
-    } catch (error) {
-      console.error('Email error:', error);
-      throw error;
-    }
+    return bug;
   }
 
   async findAll() {
