@@ -13,6 +13,7 @@ import { ActivityLogsService } from 'src/activity-logs/activity.service';
 import { SseEventType } from 'src/types/sse';
 
 import { toMinorUnit } from 'src/helpers/conversion-helpers';
+import { TransactionCategory } from '@prisma/client';
 
 @Injectable()
 export class TransactionsService {
@@ -39,6 +40,7 @@ export class TransactionsService {
         splits,
         paidById,
         type,
+        category,
       }) => {
         const userSplit = splits.find((split) => split.userId === userId);
 
@@ -59,6 +61,7 @@ export class TransactionsService {
           balance,
           amount,
           type,
+          category,
         };
       },
     );
@@ -94,6 +97,7 @@ export class TransactionsService {
     userId: string,
     groupId: string,
     amount: number,
+    category: TransactionCategory,
     description: string,
     paidBy: string,
     splits: { userId: string; amount: number }[],
@@ -129,6 +133,7 @@ export class TransactionsService {
     const transaction = await this.prisma.transaction.create({
       data: {
         amount,
+        category,
         description,
         createdBy: {
           connect: {

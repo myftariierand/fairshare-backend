@@ -51,6 +51,7 @@ export class TransactionsController {
       userId,
       createTransactionDto.groupId,
       createTransactionDto.amount,
+      createTransactionDto.category,
       createTransactionDto.description,
       createTransactionDto.paidBy,
       createTransactionDto.splits,

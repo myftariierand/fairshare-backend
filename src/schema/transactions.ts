@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
+import { TransactionCategory } from '@prisma/client';
+
 const CreateTransactionSchema = z.object({
   groupId: z.string().uuid(),
   amount: z.number().positive(),
+  category: z.nativeEnum(TransactionCategory),
   description: z.string().min(4),
   paidBy: z.string().uuid(),
   splits: z.array(
