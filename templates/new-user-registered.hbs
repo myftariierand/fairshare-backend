@@ -1,0 +1,53 @@
+<html>
+  <head>
+    <style>
+      body { background: #f8fafc; font-family: 'Inter', Arial, sans-serif;
+      color: #0f172a; margin: 0; padding: 0; } .container { max-width: 420px;
+      margin: 40px auto; background: #fff; border: 1px solid #e5e7eb;
+      border-radius: 12px; box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
+      padding: 32px 24px; } h2 { font-size: 1.5rem; font-weight: 600;
+      margin-bottom: 16px; color: #0f172a; letter-spacing: -0.5px; } p {
+      font-size: 1rem; margin-bottom: 18px; color: #334155; } .info {
+      background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px;
+      padding: 16px; margin: 24px 0; } .info-row { margin-bottom: 12px; } .label
+      { font-weight: 600; color: #0f172a; } .footer { margin-top: 24px;
+      font-size: 0.95rem; color: #64748b; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <h2>🎉 New User Registered</h2>
+
+      <p>Hello Erand,</p>
+
+      <p>A new user has just created an account on FairShare.</p>
+
+      <div class='info'>
+        <div class='info-row'>
+          <span class='label'>Name:</span>
+          {{name}}
+        </div>
+
+        <div class='info-row'>
+          <span class='label'>Email:</span>
+          {{email}}
+        </div>
+
+        <div class='info-row'>
+          <span class='label'>Registered At:</span>
+          {{registeredAt}}
+        </div>
+
+        <div class='info-row'>
+          <span class='label'>Provider:</span>
+          {{provider}}
+        </div>
+      </div>
+
+      <div class='footer'>
+        You are receiving this email because admin notifications are enabled for
+        new user registrations.
+      </div>
+    </div>
+  </body>
+</html>

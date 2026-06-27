@@ -2,12 +2,18 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
 import { DatabaseService } from 'src/database/database.service';
+import { EmailService } from 'src/email/email.service';
 
 import { Prisma, User } from '@prisma/client';
 
+import { renderTemplate } from 'templates/render-template';
+
 @Injectable()
 export class UsersService {
-  constructor(private prisma: DatabaseService) {}
+  constructor(
+    private prisma: DatabaseService,
+    private emailService: EmailService,
+  ) {}
 
   async findMany(): Promise<User[]> {
     return this.prisma.user.findMany();
@@ -52,7 +58,22 @@ export class UsersService {
 
       const data = { ...rest, password: hashedPwd };
 
-      return this.prisma.user.create({ data });
+      const user = await this.prisma.user.create({ data });
+
+      const html = renderTemplate('new-user-registered', {
+        name: user.name,
+        email: user.email,
+        registeredAt: user.createdAt,
+        provider: user.provider,
+      });
+
+      this.emailService.sendEmail({
+        to: 'myftarierand@gmail.com',
+        subject: `New user registered`,
+        html,
+      });
+
+      return user;
     } catch (error: any) {
       throw new HttpException(
         {
