@@ -32,6 +32,7 @@ export class UpdateTransactionParamsDto extends createZodDto(
 const UpdateTransactionSchema = z.object({
   groupId: z.string().uuid(),
   amount: z.number().positive(),
+  category: z.nativeEnum(TransactionCategory),
   description: z.string().min(4),
   splits: z.array(
     z.object({

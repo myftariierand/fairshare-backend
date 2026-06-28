@@ -70,6 +70,7 @@ export class TransactionsController {
       updateTransactionDto.groupId,
       updateTransactionDto.amount,
       updateTransactionDto.description,
+      updateTransactionDto.category,
       updateTransactionDto.splits,
     );
   }
