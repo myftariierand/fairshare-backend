@@ -9,6 +9,7 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
+import { GroupDebtService } from 'src/group-debt/groupDebt.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -21,6 +22,7 @@ export class TransactionsService {
     private sse: SseService,
     private prisma: DatabaseService,
     private activityLogsService: ActivityLogsService,
+    private groupDebtService: GroupDebtService,
   ) {}
 
   async findTransactions(userId: string, groupId: string) {
@@ -164,6 +166,8 @@ export class TransactionsService {
       transaction: { connect: { id: transaction.id } },
     });
 
+    await this.groupDebtService.updateRemainingDebts(groupId);
+
     const member = foundGroup.members.find(
       (member) => member.userId === userId,
     );
@@ -224,6 +228,8 @@ export class TransactionsService {
       },
     });
 
+    await this.groupDebtService.updateRemainingDebts(groupId);
+
     await this.activityLogsService.createActivityLog({
       action: 'TRANSACTION_UPDATED',
       snapshot: { group: foundGroup, transaction },
@@ -254,6 +260,8 @@ export class TransactionsService {
       });
 
       const { group, ...rest } = transaction;
+
+      await this.groupDebtService.updateRemainingDebts(group.id);
 
       await this.activityLogsService.createActivityLog({
         action: 'TRANSACTION_DELETED',
@@ -313,6 +321,8 @@ export class TransactionsService {
           paidBy: true,
         },
       });
+
+      await this.groupDebtService.updateRemainingDebts(groupId);
 
       await this.activityLogsService.createActivityLog({
         action: 'TRANSACTION_SETTLED',
