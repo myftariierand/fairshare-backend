@@ -188,6 +188,7 @@ export class TransactionsService {
     amount: number,
     description: string,
     category: TransactionCategory,
+    paidBy: string,
     splits: { userId: string; amount: number }[],
   ) {
     const foundGroup = await this.prisma.group.findUnique({
@@ -222,6 +223,7 @@ export class TransactionsService {
         amount,
         description,
         category,
+        paidById: paidBy,
         splits: {
           updateMany: updatedSplits,
         },

@@ -71,6 +71,7 @@ export class TransactionsController {
       updateTransactionDto.amount,
       updateTransactionDto.description,
       updateTransactionDto.category,
+      updateTransactionDto.paidBy,
       updateTransactionDto.splits,
     );
   }

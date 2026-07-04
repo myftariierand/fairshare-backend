@@ -34,6 +34,7 @@ const UpdateTransactionSchema = z.object({
   amount: z.number().positive(),
   category: z.nativeEnum(TransactionCategory),
   description: z.string().min(4),
+  paidBy: z.string().uuid(),
   splits: z.array(
     z.object({
       userId: z.string().uuid(),
