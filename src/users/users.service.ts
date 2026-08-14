@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
 import { DatabaseService } from 'src/database/database.service';
@@ -10,6 +10,8 @@ import { renderTemplate } from 'templates/render-template';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     private prisma: DatabaseService,
     private emailService: EmailService,
@@ -51,38 +53,33 @@ export class UsersService {
   }
 
   async create(userCreateInput: Prisma.UserCreateInput): Promise<User> {
-    try {
-      const { password, ...rest } = userCreateInput;
+    const { password, email, ...rest } = userCreateInput;
 
-      const hashedPwd = await bcrypt.hash(password, 10);
+    const hashedPwd = await bcrypt.hash(password, 10);
+    const normalizedEmail = email.trim().toLowerCase();
 
-      const data = { ...rest, password: hashedPwd };
+    const data = { ...rest, email: normalizedEmail, password: hashedPwd };
 
-      const user = await this.prisma.user.create({ data });
+    const user = await this.prisma.user.create({ data });
 
-      const html = renderTemplate('new-user-registered', {
-        name: user.name,
-        email: user.email,
-        registeredAt: user.createdAt,
-        provider: user.provider,
-      });
+    const html = renderTemplate('new-user-registered', {
+      name: user.name,
+      email: user.email,
+      registeredAt: user.createdAt,
+      provider: user.provider,
+    });
 
-      this.emailService.sendEmail({
+    this.emailService
+      .sendEmail({
         to: 'myftarierand@gmail.com',
         subject: `New user registered`,
         html,
+      })
+      .catch((err) => {
+        this.logger?.error('Failed to send new-user notification email', err);
       });
 
-      return user;
-    } catch (error: any) {
-      throw new HttpException(
-        {
-          status: HttpStatus.NOT_FOUND,
-          message: `Not Found: ${error.message}`,
-        },
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    return user;
   }
 
   async findFriendRequests(userId: string) {

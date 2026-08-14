@@ -5,6 +5,8 @@ import {
   UnauthorizedException,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, User } from '@prisma/client';
@@ -22,6 +24,8 @@ import { renderTemplate } from 'templates/render-template';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   private readonly REFRESH_TOKEN_EXPIRY_MS = 365 * 24 * 60 * 60 * 1000;
   private readonly REFRESH_TOKEN_EXPIRY = '365d';
   private readonly ACCESS_TOKEN_EXPIRY = '15m';
@@ -132,14 +136,13 @@ export class AuthService {
       }
 
       if (error instanceof Prisma.PrismaClientValidationError) {
-        throw new HttpException(
-          {
-            status: HttpStatus.FORBIDDEN,
-            error: error.message,
-          },
-          HttpStatus.FORBIDDEN,
-        );
+        this.logger.error('User registration validation error', error.message);
+        throw new BadRequestException('Invalid registration data.');
       }
+
+      // Unknown error — log and rethrow so it isn't silently swallowed
+      this.logger.error('Unexpected error during registration', error);
+      throw error;
     }
   }
 
@@ -256,7 +259,9 @@ export class AuthService {
   }
 
   async forgotPassword(email: string) {
-    const user = await this.usersService.findUnique({ email });
+    const user = await this.usersService.findUnique({
+      email: email.trim().toLowerCase(),
+    });
 
     if (user) {
       const resetToken = await this.jwtService.signAsync(
@@ -267,7 +272,9 @@ export class AuthService {
         },
       );
 
-      const html = renderTemplate('reset-password', { resetToken });
+      const resetUrl = `${process.env.CLIENT_ORIGIN}/reset-password?token=${resetToken}`;
+
+      const html = renderTemplate('reset-password', { resetUrl });
 
       await this.emailService.sendEmail({
         to: user.email,
