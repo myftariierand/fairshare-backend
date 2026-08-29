@@ -163,29 +163,64 @@ export class AuthService {
   }
 
   async getProfile(id: string) {
+    console.log(id);
+
     const user = (await this.usersService.findUnique(
       { id },
       {
         include: {
-          groups: {
+          memberships: {
+            where: {
+              userId: id,
+            },
             include: {
-              members: true,
-              transactions: {
+              group: {
                 include: {
-                  splits: true,
-                  group: { select: { currency: true } },
+                  members: true,
+                  transactions: {
+                    include: {
+                      splits: true,
+                      group: {
+                        select: {
+                          currency: true,
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },
           },
-          friendshipsReceiver: { include: { sender: true, receiver: true } },
-          friendshipsSender: { include: { sender: true, receiver: true } },
+
+          friendshipsReceiver: {
+            include: {
+              sender: true,
+              receiver: true,
+            },
+          },
+
+          friendshipsSender: {
+            include: {
+              sender: true,
+              receiver: true,
+            },
+          },
         },
         omit: { password: true },
       },
     )) as Prisma.UserGetPayload<{
       include: {
-        groups: true;
+        memberships: {
+          include: {
+            group: {
+              include: {
+                transactions: {
+                  include: { group: { select: { currency: true } } };
+                };
+              };
+            };
+          };
+        };
         friendshipsReceiver: { include: { sender: true; receiver: true } };
         friendshipsSender: { include: { sender: true; receiver: true } };
       };
@@ -214,7 +249,9 @@ export class AuthService {
       };
     });
 
-    return { ...user, friends };
+    const groups = user.memberships.map((membership) => membership.group);
+
+    return { ...user, groups, friends };
   }
 
   async changePassword(
