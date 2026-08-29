@@ -17,8 +17,6 @@ import { AuthService } from 'src/auth/auth.service';
 import { Cookies, Public } from 'src/auth/auth.decorators';
 
 import { LoginDto, RegisterDto, UpdateProfileDto } from 'src/auth/schema';
-import { UserDto } from 'src/schema/user';
-import { ZodSerializerDto } from 'nestjs-zod';
 import { User } from '@prisma/client';
 import { UserId } from 'src/users/user.decorator';
 
@@ -62,7 +60,6 @@ export class AuthController {
   }
 
   @Get('profile')
-  @ZodSerializerDto(UserDto)
   getProfile(@Req() req) {
     return this.authService.getProfile(req.id);
   }

@@ -163,9 +163,58 @@ export class AuthService {
   }
 
   async getProfile(id: string) {
-    const user = await this.usersService.findUnique({ id });
+    const user = (await this.usersService.findUnique(
+      { id },
+      {
+        include: {
+          groups: {
+            include: {
+              members: true,
+              transactions: {
+                include: {
+                  splits: true,
+                  group: { select: { currency: true } },
+                },
+              },
+            },
+          },
+          friendshipsReceiver: { include: { sender: true, receiver: true } },
+          friendshipsSender: { include: { sender: true, receiver: true } },
+        },
+        omit: { password: true },
+      },
+    )) as Prisma.UserGetPayload<{
+      include: {
+        groups: true;
+        friendshipsReceiver: { include: { sender: true; receiver: true } };
+        friendshipsSender: { include: { sender: true; receiver: true } };
+      };
+    }>;
 
-    return user;
+    if (!user) return null;
+
+    const friends = [
+      ...user.friendshipsReceiver.filter(
+        (request) => request.status === 'ACCEPTED',
+      ),
+      ...user.friendshipsSender.filter(
+        (request) => request.status === 'ACCEPTED',
+      ),
+    ].map((friendship) => {
+      const friend =
+        friendship.senderId === id ? friendship.receiver : friendship.sender;
+
+      return {
+        id: friend.id,
+        name: friend.name,
+        email: friend.email,
+        requestId: friendship.id,
+        createdAt: friend.createdAt,
+        updatedAt: friend.updatedAt,
+      };
+    });
+
+    return { ...user, friends };
   }
 
   async changePassword(

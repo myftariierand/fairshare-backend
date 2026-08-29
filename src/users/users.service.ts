@@ -23,8 +23,12 @@ export class UsersService {
 
   async findUnique(
     userWhereUniqueInput: Prisma.UserWhereUniqueInput,
+    userFindUniqueArgs?: Omit<Prisma.UserFindUniqueArgs, 'where'>,
   ): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: userWhereUniqueInput });
+    return this.prisma.user.findUnique({
+      where: userWhereUniqueInput,
+      ...userFindUniqueArgs,
+    });
   }
 
   async searchUsers(
