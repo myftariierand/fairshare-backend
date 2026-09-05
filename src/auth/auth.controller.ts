@@ -125,4 +125,13 @@ export class AuthController {
   async googleAuthCallback(@Req() req, @Res() res: Response) {
     this.authService.googleLogin(req.user, res);
   }
+
+  @Public()
+  @Post('admin/login')
+  async adminLogin(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.authService.loginAdmin(loginDto, response);
+  }
 }

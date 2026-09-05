@@ -26,6 +26,7 @@ model User {
   activityLog         ActivityLog[]
   targetActivityLog   ActivityLog[]      @relation("TargetUser")
   provider            String             @default("local")
+  role                Role               @default(USER)
 }
 
 model Group {
@@ -228,4 +229,9 @@ enum TransactionCategory {
   DONATIONS
   PERSONAL_CARE
   UTILITIES
+}
+
+enum Role {
+  USER
+  ADMIN
 }
