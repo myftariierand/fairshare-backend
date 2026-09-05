@@ -9,7 +9,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Prisma, User } from '@prisma/client';
+import { Prisma, Role, User } from '@prisma/client';
 import { Response } from 'express';
 import * as bcrypt from 'bcrypt';
 
@@ -82,7 +82,7 @@ export class AuthService {
         secret: process.env.REFRESH_TOKEN_SECRET,
       });
 
-      const payload = { id: res.id };
+      const payload = { id: res.id, role: res.role };
       const accessToken = await this.jwtService.signAsync(payload, {
         secret: process.env.ACCESS_TOKEN_SECRET,
         expiresIn: this.ACCESS_TOKEN_EXPIRY,
@@ -423,5 +423,59 @@ export class AuthService {
     } catch (error: any) {
       throw new UnauthorizedException('Invalid or expired token');
     }
+  }
+
+  async loginAdmin(loginDto: LoginDto, response: Response) {
+    const user = await this.usersService.findUnique({ email: loginDto.email });
+
+    // Generic message on purpose — don't leak whether the email exists or
+    // whether it exists-but-isn't-an-admin. Both are useful signal to an attacker.
+    const invalidCreds = () =>
+      new UnauthorizedException('Invalid email or password.');
+
+    if (!user) throw invalidCreds();
+
+    const passMatch = await bcrypt.compare(loginDto.password, user.password);
+    if (!passMatch) throw invalidCreds();
+
+    if (user.role !== Role.ADMIN) {
+      // Log this — repeated hits are a signal someone's probing for admin access.
+      this.logger.warn(`Non-admin login attempt on admin endpoint: ${user.id}`);
+      throw invalidCreds();
+    }
+
+    const payload = { id: user.id, role: user.role };
+
+    const accessToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.ACCESS_TOKEN_SECRET,
+      expiresIn: this.ACCESS_TOKEN_EXPIRY,
+    });
+    const refreshToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.REFRESH_TOKEN_SECRET,
+      expiresIn: this.REFRESH_TOKEN_EXPIRY,
+    });
+
+    response.cookie('jwt', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
+      sameSite: 'none',
+    });
+
+    return {
+      accessToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    };
+  }
+
+  async me(userId: string) {
+    const user = await this.usersService.findUnique({ id: userId });
+    if (!user) throw new NotFoundException('User not found');
+    return { id: user.id, name: user.name, email: user.email, role: user.role };
   }
 }
