@@ -8,9 +8,17 @@ export class AdminService {
 
   getGroups() {
     return this.prisma.group.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }],
       include: {
         createdBy: { select: { name: true } },
+        members: {
+          select: { user: { select: { id: true, name: true, email: true } } },
+        },
+        transactions: {
+          where: { type: 'EXPENSE' },
+          orderBy: { createdAt: 'desc' },
+          include: { paidBy: { omit: { password: true } } },
+        },
         _count: { select: { transactions: true, members: true } },
       },
     });
