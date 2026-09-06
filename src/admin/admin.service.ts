@@ -24,16 +24,15 @@ export class AdminService {
     });
   }
 
-  getTransactions() {
-    return this.prisma.transaction.findMany();
-  }
-
   getActivities() {
     return this.prisma.activityLog.findMany();
   }
 
   getUsers() {
-    return this.prisma.user.findMany();
+    return this.prisma.user.findMany({
+      where: { role: 'USER' },
+      omit: { password: true },
+    });
   }
 
   getBugs() {
