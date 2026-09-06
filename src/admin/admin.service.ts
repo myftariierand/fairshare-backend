@@ -8,16 +8,20 @@ export class AdminService {
 
   getGroups() {
     return this.prisma.group.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }],
       include: {
         createdBy: { select: { name: true } },
+        members: {
+          select: { user: { select: { id: true, name: true, email: true } } },
+        },
+        transactions: {
+          where: { type: 'EXPENSE' },
+          orderBy: { createdAt: 'desc' },
+          include: { paidBy: { omit: { password: true } } },
+        },
         _count: { select: { transactions: true, members: true } },
       },
     });
-  }
-
-  getTransactions() {
-    return this.prisma.transaction.findMany();
   }
 
   getActivities() {
@@ -25,7 +29,10 @@ export class AdminService {
   }
 
   getUsers() {
-    return this.prisma.user.findMany();
+    return this.prisma.user.findMany({
+      where: { role: 'USER' },
+      omit: { password: true },
+    });
   }
 
   getBugs() {

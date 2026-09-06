@@ -13,11 +13,6 @@ export class AdminController {
     return this.adminService.getGroups();
   }
 
-  @Get('transactions')
-  getTransactions() {
-    return this.adminService.getTransactions();
-  }
-
   @Get('activites')
   getActivity() {
     return this.adminService.getActivities();
