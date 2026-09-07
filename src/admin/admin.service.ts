@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 
 import { DatabaseService } from 'src/database/database.service';
 
@@ -31,11 +32,36 @@ export class AdminService {
   getUsers() {
     return this.prisma.user.findMany({
       where: { role: 'USER' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        memberships: {
+          orderBy: { joinedAt: 'desc' },
+          include: { group: true },
+        },
+        _count: {
+          select: {
+            memberships: true,
+            transactionSplits: true,
+            friendshipsReceiver: { where: { status: 'ACCEPTED' } },
+            friendshipsSender: { where: { status: 'ACCEPTED' } },
+          },
+        },
+      },
       omit: { password: true },
     });
   }
 
   getBugs() {
     return this.prisma.bugReport.findMany();
+  }
+
+  async updateUser(id: string, newPassword: string) {
+    const password = await bcrypt.hash(newPassword, 10);
+
+    return this.prisma.user.update({ where: { id }, data: { password } });
+  }
+
+  deleteUser(id: string) {
+    return this.prisma.user.delete({ where: { id } });
   }
 }
