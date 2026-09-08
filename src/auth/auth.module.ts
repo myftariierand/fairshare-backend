@@ -7,10 +7,11 @@ import { AuthController } from 'src/auth/auth.controller';
 import { UsersModule } from 'src/users/users.module';
 import { GoogleStrategy } from './google.strategy';
 import { EmailModule } from 'src/email/email.module';
+import { OtpService } from 'src/otp/otp.service';
 
 @Module({
   imports: [UsersModule, JwtModule.register({ global: true }), EmailModule],
-  providers: [AuthService, GoogleStrategy],
+  providers: [AuthService, GoogleStrategy, OtpService],
   controllers: [AuthController],
 })
 export class AuthModule {}

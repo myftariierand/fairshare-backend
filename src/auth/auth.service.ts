@@ -21,6 +21,7 @@ import { EmailService } from 'src/email/email.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 import { renderTemplate } from 'templates/render-template';
+import { OtpService } from 'src/otp/otp.service';
 
 @Injectable()
 export class AuthService {
@@ -36,6 +37,7 @@ export class AuthService {
     private prisma: DatabaseService,
     private emailService: EmailService,
     private activityLogsService: ActivityLogsService,
+    private otpService: OtpService,
   ) {}
 
   async login(
@@ -107,6 +109,15 @@ export class AuthService {
         action: 'USER_REGISTERED',
         user: { connect: { id: user.id } },
       });
+
+      try {
+        await this.otpService.sendOtp(user);
+      } catch (otpError) {
+        this.logger.error(
+          'Failed to send verification OTP after registration',
+          otpError,
+        );
+      }
 
       const payload = { id: user.id };
       const accessToken = await this.jwtService.signAsync(payload, {

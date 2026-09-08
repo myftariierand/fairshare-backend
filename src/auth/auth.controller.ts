@@ -16,13 +16,25 @@ import { Response } from 'express';
 import { AuthService } from 'src/auth/auth.service';
 import { Cookies, Public } from 'src/auth/auth.decorators';
 
-import { LoginDto, RegisterDto, UpdateProfileDto } from 'src/auth/schema';
+import {
+  LoginDto,
+  RegisterDto,
+  UpdateProfileDto,
+  VerifyOtpDtoClass,
+  RequestOtpDtoClass,
+} from 'src/auth/schema';
 import { User } from '@prisma/client';
 import { UserId } from 'src/users/user.decorator';
+import { OtpService } from 'src/otp/otp.service';
+import { UsersService } from 'src/users/users.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private otpService: OtpService,
+    private usersService: UsersService,
+  ) {}
 
   @Public()
   @HttpCode(HttpStatus.OK)
@@ -124,6 +136,35 @@ export class AuthController {
   @Public()
   async googleAuthCallback(@Req() req, @Res() res: Response) {
     this.authService.googleLogin(req.user, res);
+  }
+
+  @Public()
+  @Post('verify-email/send')
+  async sendVerificationEmail(@Body() body: RequestOtpDtoClass) {
+    const user = await this.usersService.findUnique({
+      email: body.email,
+    });
+
+    if (user) {
+      await this.otpService.sendOtp(user);
+    }
+    return { message: 'If that email is registered, a code has been sent.' };
+  }
+
+  @Public()
+  @Post('verify-email/verify')
+  async verifyEmailOtp(
+    @Body() body: VerifyOtpDtoClass,
+  ): Promise<{ verified: boolean }> {
+    const user = await this.usersService.findUnique({ email: body.email });
+
+    if (!user) {
+      return { verified: false };
+    }
+
+    const isValid = await this.otpService.verifyOtp(user, body.otp);
+
+    return { verified: isValid };
   }
 
   @Public()

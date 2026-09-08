@@ -8,6 +8,7 @@ const UserSchema = z.object({
   createdAt: z.date(),
   updatedAt: z.date(),
   provider: z.string(),
+  emailVerified: z.boolean(),
 });
 
 export class UserDto extends createZodDto(UserSchema) {}
