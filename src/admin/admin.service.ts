@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
+import { BugStatus, Severity } from '@prisma/client';
+
 import { DatabaseService } from 'src/database/database.service';
 
 @Injectable()
@@ -52,7 +54,20 @@ export class AdminService {
   }
 
   getBugs() {
-    return this.prisma.bugReport.findMany();
+    return this.prisma.bugReport.findMany({ orderBy: [{ createdAt: 'desc' }] });
+  }
+
+  updateBugReport(id: string, status: BugStatus, severity: Severity) {
+    return this.prisma.bugReport.update({
+      where: { id },
+      data: { status, severity },
+    });
+  }
+
+  deleteBugReport(id: string) {
+    return this.prisma.bugReport.delete({
+      where: { id },
+    });
   }
 
   async updateUser(id: string, newPassword: string) {

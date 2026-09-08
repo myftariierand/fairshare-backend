@@ -7,6 +7,7 @@ import {
   Patch,
   UseGuards,
 } from '@nestjs/common';
+import { BugStatus, Severity } from '@prisma/client';
 
 import { AdminService } from 'src/admin/admin.service';
 import { AdminOnlyGuard } from 'src/admin/role.guard';
@@ -47,5 +48,18 @@ export class AdminController {
   @Get('bugs')
   getBugReports() {
     return this.adminService.getBugs();
+  }
+
+  @Patch('bugs/:id')
+  updateBugReport(
+    @Param() { id }: { id: string },
+    @Body() { status, severity }: { status: BugStatus; severity: Severity },
+  ) {
+    return this.adminService.updateBugReport(id, status, severity);
+  }
+
+  @Delete('bugs/:id')
+  deleteBugReports(@Param() { id }: { id: string }) {
+    return this.adminService.deleteBugReport(id);
   }
 }
