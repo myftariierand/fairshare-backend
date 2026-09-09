@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Patch,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { BugStatus, Severity } from '@prisma/client';
@@ -23,8 +24,8 @@ export class AdminController {
   }
 
   @Get('activites')
-  getActivity() {
-    return this.adminService.getActivities();
+  getActivity(@Query() query: { page: number; limit: number }) {
+    return this.adminService.getActivities(query);
   }
 
   @Get('users')

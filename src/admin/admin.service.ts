@@ -27,8 +27,45 @@ export class AdminService {
     });
   }
 
-  getActivities() {
-    return this.prisma.activityLog.findMany();
+  async getActivities({
+    page: strPage,
+    limit: strLimit,
+  }: {
+    page: number;
+    limit: number;
+  }) {
+    const page = +strPage,
+      limit = +strLimit;
+
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.activityLog.findMany({
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          user: { omit: { password: true } },
+          targetUser: { omit: { password: true } },
+        },
+      }),
+
+      this.prisma.activityLog.count(),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 
   getUsers() {
