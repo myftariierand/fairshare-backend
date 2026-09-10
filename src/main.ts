@@ -12,11 +12,8 @@ async function bootstrap() {
     return this.toNumber();
   };
 
-  const allowedOrigins =
-    process.env.CLIENT_ORIGIN?.split(',').map((origin) => origin.trim()) ?? [];
-
   app.enableCors({
-    origin: allowedOrigins,
+    origin: [process.env.CLIENT_ORIGIN ?? '', process.env.ADMIN_ORIGIN ?? ''],
     credentials: true,
   });
   app.use(cookieParser());
