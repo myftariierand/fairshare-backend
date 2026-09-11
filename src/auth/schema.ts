@@ -30,3 +30,16 @@ export class RegisterDto extends createZodDto(RegisterSchema) {}
 const UpdateProfileSchema = z.object({ name: z.string() });
 
 export class UpdateProfileDto extends createZodDto(UpdateProfileSchema) {}
+
+export const RequestOtpDto = z.object({
+  email: z.string().email(),
+});
+
+export class RequestOtpDtoClass extends createZodDto(RequestOtpDto) {}
+
+export const VerifyOtpDto = z.object({
+  email: z.string().email(),
+  otp: z.string(),
+});
+
+export class VerifyOtpDtoClass extends createZodDto(VerifyOtpDto) {}
