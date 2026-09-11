@@ -15,6 +15,7 @@ import { ActivityLogsModule } from 'src/activity-logs/activity.module';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { BugReportsModule } from 'src/bug-reports/bug-reports.module';
 import { AdminModule } from 'src/admin/admin.module';
+import { TasksModule } from 'src/tasks/tasks.module';
 
 import { AuthGuard } from 'src/auth/auth.guard';
 
@@ -33,6 +34,7 @@ import { AuthGuard } from 'src/auth/auth.guard';
     ActivityLogsModule,
     BugReportsModule,
     AdminModule,
+    TasksModule,
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },
