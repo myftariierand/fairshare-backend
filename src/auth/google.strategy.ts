@@ -29,6 +29,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         email,
         password: '', // Not used for OAuth users
         provider: 'google',
+        emailVerified: true,
       });
     }
 
