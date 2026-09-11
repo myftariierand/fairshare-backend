@@ -29,6 +29,7 @@ model User {
   emailVerificationOtp EmailVerificationOtp?
   provider            String             @default("local")
   role                Role               @default(USER)
+  tasks               Task[]
 }
 
 model Group {
@@ -45,6 +46,7 @@ model Group {
   transactions   Transaction[]
   activityLog    ActivityLog[]
   remainingDebts Int               @default(0)
+  tasks          Task[]
 }
 
 model GroupMember {
@@ -132,6 +134,21 @@ model ActivityLog {
   @@index([userId])
   @@index([groupId])
   @@index([transactionId])
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  text        String
+  done        Boolean  @default(false)
+  position    Int
+  groupId     String
+  createdById String
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([groupId])
 }
 
 enum FriendshipStatus {
