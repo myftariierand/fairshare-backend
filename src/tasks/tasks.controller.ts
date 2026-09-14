@@ -38,20 +38,29 @@ export class TasksController {
 
   @Patch(':taskId')
   update(
+    @UserId() userId,
     @Param('groupId') groupId: string,
     @Param('taskId') taskId: string,
     @Body() dto: UpdateTaskDto,
   ) {
-    return this.tasksService.update(taskId, groupId, dto);
+    return this.tasksService.update(userId, taskId, groupId, dto);
   }
 
   @Put('reorder')
-  reorder(@Param('groupId') groupId: string, @Body() dto: ReorderTasksDto) {
-    return this.tasksService.reorder(groupId, dto.orderedIds);
+  reorder(
+    @UserId() userId,
+    @Param('groupId') groupId: string,
+    @Body() dto: ReorderTasksDto,
+  ) {
+    return this.tasksService.reorder(userId, groupId, dto.orderedIds);
   }
 
   @Delete(':taskId')
-  remove(@Param('taskId') taskId: string) {
-    return this.tasksService.remove(taskId);
+  remove(
+    @UserId() userId,
+    @Param('groupId') groupId: string,
+    @Param('taskId') taskId: string,
+  ) {
+    return this.tasksService.remove(userId, groupId, taskId);
   }
 }
