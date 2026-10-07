@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 
 import { AuthService } from 'src/auth/auth.service';
 import { Cookies, Public } from 'src/auth/auth.decorators';
@@ -42,8 +42,9 @@ export class AuthController {
   login(
     @Body() loginDto: LoginDto,
     @Res({ passthrough: true }) response: Response,
+    @Req() request: Request<{ headers: { 'x-client': string } }>,
   ) {
-    return this.authService.login(loginDto, response);
+    return this.authService.login(loginDto, response, request);
   }
 
   @Public()
@@ -53,12 +54,19 @@ export class AuthController {
   }
 
   @Public()
+  @Post('refresh')
+  refreshMobile(@Body('refreshToken') refreshToken: string) {
+    return this.authService.refresh(refreshToken);
+  }
+
+  @Public()
   @Post('register')
   register(
     @Body() registerDto: RegisterDto,
     @Res({ passthrough: true }) response: Response,
+    @Req() request: Request<{ headers: { 'x-client': string } }>,
   ) {
-    return this.authService.register(registerDto, response);
+    return this.authService.register(registerDto, response, request);
   }
 
   @Public()
@@ -136,6 +144,12 @@ export class AuthController {
   @Public()
   async googleAuthCallback(@Req() req, @Res() res: Response) {
     this.authService.googleLogin(req.user, res);
+  }
+
+  @Public()
+  @Post('google/mobile')
+  async googleMobile(@Body() dto: { idToken: string }) {
+    return this.authService.loginWithGoogleIdToken(dto.idToken);
   }
 
   @Public()

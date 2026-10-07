@@ -10,8 +10,9 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, Role, User } from '@prisma/client';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import * as bcrypt from 'bcrypt';
+import { OAuth2Client } from 'google-auth-library';
 
 import { LoginDto, RegisterDto } from 'src/auth/schema';
 
@@ -26,6 +27,7 @@ import { OtpService } from 'src/otp/otp.service';
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private googleClient = new OAuth2Client();
 
   private readonly REFRESH_TOKEN_EXPIRY_MS = 365 * 24 * 60 * 60 * 1000;
   private readonly REFRESH_TOKEN_EXPIRY = '365d';
@@ -43,7 +45,12 @@ export class AuthService {
   async login(
     loginDto: LoginDto,
     response: Response,
-  ): Promise<{ accessToken: string }> {
+    request: Request<{ headers: { 'x-client': string } }>,
+  ): Promise<{
+    accessToken: string;
+    refreshToken?: string;
+    user?: Omit<User, 'password'>;
+  }> {
     const user = await this.usersService.findUnique({ email: loginDto.email });
 
     if (!user)
@@ -51,7 +58,9 @@ export class AuthService {
         'It seems you don’t have an account with us. Please register to get started.',
       );
 
-    const passMatch = await bcrypt.compare(loginDto.password, user.password);
+    const { password, ...rest } = user;
+
+    const passMatch = await bcrypt.compare(loginDto.password, password);
 
     if (!passMatch)
       throw new UnauthorizedException(
@@ -67,6 +76,9 @@ export class AuthService {
       secret: process.env.REFRESH_TOKEN_SECRET,
       expiresIn: this.REFRESH_TOKEN_EXPIRY,
     });
+
+    if (request.headers['x-client'] === 'mobile')
+      return { accessToken, refreshToken, user: rest };
 
     response.cookie('jwt', refreshToken, {
       httpOnly: true,
@@ -101,7 +113,11 @@ export class AuthService {
     }
   }
 
-  async register({ email, name, password }: RegisterDto, response: Response) {
+  async register(
+    { email, name, password }: RegisterDto,
+    response: Response,
+    request: Request<{ headers: { 'x-client': string } }>,
+  ) {
     try {
       const user = await this.usersService.create({ email, name, password });
 
@@ -128,6 +144,9 @@ export class AuthService {
         secret: process.env.REFRESH_TOKEN_SECRET,
         expiresIn: this.REFRESH_TOKEN_EXPIRY,
       });
+
+      if (request.headers['x-client'] === 'mobile')
+        return { accessToken, refreshToken, user };
 
       response.cookie('jwt', refreshToken, {
         httpOnly: true,
@@ -488,5 +507,46 @@ export class AuthService {
     const user = await this.usersService.findUnique({ id: userId });
     if (!user) throw new NotFoundException('User not found');
     return { id: user.id, name: user.name, email: user.email, role: user.role };
+  }
+
+  async loginWithGoogleIdToken(idToken: string) {
+    const ticket = await this.googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_WEB_CLIENT_ID!,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload?.email || !payload.email_verified) {
+      throw new UnauthorizedException('Google account not verified');
+    }
+
+    let user = await this.usersService.findUnique({ email: payload.email });
+
+    if (!user) {
+      user = await this.usersService.create({
+        name: payload.name ?? payload.given_name ?? payload.email.split('@')[0],
+        email: payload.email,
+        password: '', // Not used for OAuth users
+        provider: 'google',
+        emailVerified: true,
+      });
+    }
+
+    const accessToken = await this.jwtService.signAsync(
+      { id: user.id },
+      {
+        secret: process.env.ACCESS_TOKEN_SECRET,
+        expiresIn: this.ACCESS_TOKEN_EXPIRY,
+      },
+    );
+    const refreshToken = await this.jwtService.signAsync(
+      { id: user.id },
+      {
+        secret: process.env.REFRESH_TOKEN_SECRET,
+        expiresIn: this.REFRESH_TOKEN_EXPIRY,
+      },
+    );
+
+    return { accessToken, refreshToken };
   }
 }

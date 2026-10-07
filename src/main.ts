@@ -13,7 +13,11 @@ async function bootstrap() {
   };
 
   app.enableCors({
-    origin: [process.env.CLIENT_ORIGIN ?? '', process.env.ADMIN_ORIGIN ?? ''],
+    origin: [
+      process.env.CLIENT_ORIGIN ?? '',
+      process.env.ADMIN_ORIGIN ?? '',
+      process.env.MOBILE_ORIGIN ?? '',
+    ],
     credentials: true,
   });
   app.use(cookieParser());

@@ -32,6 +32,7 @@
     "bcrypt": "^5.1.1",
     "cloudinary": "^2.7.0",
     "cookie-parser": "^1.4.7",
+    "google-auth-library": "^11.1.0",
     "handlebars": "^4.7.8",
     "nestjs-zod": "^4.2.0",
     "passport": "^0.7.0",
