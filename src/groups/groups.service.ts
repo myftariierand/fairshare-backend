@@ -77,6 +77,22 @@ export class GroupsService {
           response.transactions,
         );
 
+        const transactions = response.transactions.map((t) => {
+          const userSplit = t.splits.find((split) => split.userId === userId);
+
+          const balance =
+            t.paidById === userId
+              ? t.splits.reduce(
+                  (sum, split) =>
+                    sum +
+                    (split.userId !== userId ? split.amount.toNumber() : 0),
+                  0,
+                )
+              : -(userSplit?.amount.toNumber() ?? 0);
+
+          return { ...t, balance };
+        });
+
         const transformedResponse = {
           ...response,
           members: response?.members.map(
@@ -89,6 +105,7 @@ export class GroupsService {
           ),
           balances,
           settlements,
+          transactions,
         };
 
         return transformedResponse;
