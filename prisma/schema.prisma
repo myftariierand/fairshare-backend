@@ -8,28 +8,29 @@ datasource db {
 }
 
 model User {
-  id                  String             @id @default(uuid())
-  name                String
-  email               String             @unique
-  password            String
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  friendshipsReceiver Friendships[]      @relation("FriendshipReceiver")
-  friendshipsSender   Friendships[]      @relation("FriendshipSender")
-  groups              Group[]            @relation("GroupCreatedBy")
-  invitationReceiver  GroupInvitation[]  @relation("GroupInvitationReceiver")
-  invitationSender    GroupInvitation[]  @relation("GroupInvitationSender")
-  memberships         GroupMember[]
-  createdTransactions Transaction[]      @relation("CreatedBy")
-  paidTransactions    Transaction[]      @relation("PaidBy")
-  transactionSplits   TransactionSplit[]
-  activityLog         ActivityLog[]
-  targetActivityLog   ActivityLog[]      @relation("TargetUser")
-  emailVerified        Boolean @default(false)
+  id                   String                @id @default(uuid())
+  name                 String
+  email                String                @unique
+  password             String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  friendshipsReceiver  Friendships[]         @relation("FriendshipReceiver")
+  friendshipsSender    Friendships[]         @relation("FriendshipSender")
+  groups               Group[]               @relation("GroupCreatedBy")
+  invitationReceiver   GroupInvitation[]     @relation("GroupInvitationReceiver")
+  invitationSender     GroupInvitation[]     @relation("GroupInvitationSender")
+  memberships          GroupMember[]
+  createdTransactions  Transaction[]         @relation("CreatedBy")
+  paidTransactions     Transaction[]         @relation("PaidBy")
+  transactionSplits    TransactionSplit[]
+  activityLog          ActivityLog[]
+  targetActivityLog    ActivityLog[]         @relation("TargetUser")
+  emailVerified        Boolean               @default(false)
   emailVerificationOtp EmailVerificationOtp?
-  provider            String             @default("local")
-  role                Role               @default(USER)
-  tasks               Task[]
+  provider             String                @default("local")
+  role                 Role                  @default(USER)
+  tasks                Task[]
+  deviceTokens         DeviceToken[]
 }
 
 model Group {
@@ -220,7 +221,6 @@ model EmailVerificationOtp {
   updatedAt DateTime @updatedAt
 }
 
-
 enum Severity {
   CRITICAL
   MAJOR
@@ -266,4 +266,16 @@ enum TransactionCategory {
 enum Role {
   USER
   ADMIN
+}
+
+model DeviceToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  platform  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

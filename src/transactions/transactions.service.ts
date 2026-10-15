@@ -10,6 +10,7 @@ import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 import { GroupDebtService } from 'src/group-debt/groupDebt.service';
+import { PushService } from 'src/devices/push.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -23,6 +24,7 @@ export class TransactionsService {
     private prisma: DatabaseService,
     private activityLogsService: ActivityLogsService,
     private groupDebtService: GroupDebtService,
+    private push: PushService,
   ) {}
 
   async findTransactions(userId: string, groupId: string) {
@@ -177,6 +179,18 @@ export class TransactionsService {
       SseEventType.TRANSACTION_ADDED,
       `${member?.user.name} added ${transaction.description}`,
     );
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    this.push.sendToUsers(receiversIds, {
+      title: foundGroup.name,
+      body: `${user?.name} added "${transaction.description}"`,
+      data: {
+        type: 'TRANSACTION_ADDED',
+        groupId: foundGroup.id,
+        transactionId: transaction.id,
+      },
+    });
 
     return transaction;
   }
