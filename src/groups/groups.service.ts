@@ -12,6 +12,7 @@ import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { PushService } from 'src/devices/push.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -24,6 +25,7 @@ export class GroupsService {
     private prisma: DatabaseService,
     private activityLogsService: ActivityLogsService,
     private cloudinaryService: CloudinaryService,
+    private push: PushService,
   ) {}
 
   async findMany(userId: string) {
@@ -302,6 +304,28 @@ export class GroupsService {
         SseEventType.GROUP_INVITE_RECEIVED,
         `${response.sender.name} invites you to join ${response.group.name}`,
       );
+
+      await this.push.sendToUsers([receiverId], {
+        title: response.group.name,
+        body: `${response.sender.name} invites you to join this group`,
+        categoryId: 'group_invite',
+        data: {
+          type: SseEventType.GROUP_INVITE_RECEIVED,
+          inviteId: response.id,
+          groupId: response.group.id,
+        },
+      });
+
+      // this.push.sendDataOnlyToUsers([userId], {
+      //   title: response.group.name,
+      //   body: `${response.sender.name} invites you to join this group`,
+      //   categoryId: 'group_invite',
+      //   data: {
+      //     type: SseEventType.GROUP_INVITE_RECEIVED,
+      //     inviteId: response.id,
+      //     groupId: response.group.id,
+      //   },
+      // });
 
       return response;
     } catch (error) {

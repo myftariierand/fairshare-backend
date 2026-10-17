@@ -5,6 +5,7 @@ import { Friendships } from '@prisma/client';
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
+import { PushService } from 'src/devices/push.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -14,6 +15,7 @@ export class FriendshipsService {
     private sse: SseService,
     private prisma: DatabaseService,
     private activityLogsService: ActivityLogsService,
+    private push: PushService,
   ) {}
 
   async findFriends(userId: string) {
@@ -117,6 +119,11 @@ export class FriendshipsService {
         `${response.sender.name} sent you a friend request`,
       );
 
+      this.push.sendToUsers([receiverId], {
+        title: 'New Friend Request',
+        body: `${response.sender.name} wants to be your firend`,
+      });
+
       return response;
     } catch (error) {
       console.log(error);
@@ -151,6 +158,14 @@ export class FriendshipsService {
         `${response.receiver.name} accepted your friend request`,
       );
 
+      this.push.sendToUsers([response.senderId], {
+        title: 'Friend Request Accepted',
+        body: `${response.receiver.name} is now your friend`,
+        data: {
+          type: SseEventType.FRIEND_REQUEST_ACCEPTED,
+        },
+      });
+
       return response;
     } catch (error) {
       console.log(error);
@@ -182,6 +197,11 @@ export class FriendshipsService {
         SseEventType.FRIEND_REQUEST_REJECTED,
         `${response.receiver.name} rejected your friend request`,
       );
+
+      this.push.sendToUsers([response.senderId], {
+        title: 'Friend Request Rejected',
+        body: `${response.receiver.name} rejected your friend request`,
+      });
 
       return response;
     } catch (error) {

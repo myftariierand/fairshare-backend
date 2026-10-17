@@ -186,9 +186,8 @@ export class TransactionsService {
       title: foundGroup.name,
       body: `${user?.name} added "${transaction.description}"`,
       data: {
-        type: 'TRANSACTION_ADDED',
+        type: SseEventType.TRANSACTION_ADDED,
         groupId: foundGroup.id,
-        transactionId: transaction.id,
       },
     });
 
@@ -265,6 +264,15 @@ export class TransactionsService {
       `${updater?.user.name} updated ${transaction.description}`,
     );
 
+    this.push.sendToUsers(receivers, {
+      title: foundGroup.name,
+      body: `${updater?.user.name} updated "${transaction.description}"`,
+      data: {
+        type: SseEventType.TRANSACTION_UPDATED,
+        groupId: foundGroup.id,
+      },
+    });
+
     return transaction;
   }
 
@@ -296,6 +304,15 @@ export class TransactionsService {
         SseEventType.TRANSACTION_DELETED,
         `${user?.user.name} deleted ${transaction.description}`,
       );
+
+      this.push.sendToUsers(receivers, {
+        title: transaction.group.name,
+        body: `${user?.user.name} deleted "${transaction.description}"`,
+        data: {
+          type: SseEventType.TRANSACTION_DELETED,
+          groupId: transaction.group.id,
+        },
+      });
 
       return transaction;
     } catch (error) {
@@ -352,8 +369,17 @@ export class TransactionsService {
       this.sse.emit(
         membersIds,
         SseEventType.TRANSACTION_SETTLED,
-        `${res.createdBy.name} and ${res.paidBy.name} have settled up `,
+        `${res.createdBy.name} and ${res.paidBy.name} have settled up`,
       );
+
+      this.push.sendToUsers(membersIds, {
+        title: res.group.name,
+        body: `${res.createdBy.name} and ${res.paidBy.name} have settled up`,
+        data: {
+          type: SseEventType.TRANSACTION_SETTLED,
+          groupId: res.group.id,
+        },
+      });
 
       return res;
     } catch (error) {

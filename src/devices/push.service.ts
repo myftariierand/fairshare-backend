@@ -3,42 +3,75 @@ import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 
 import { DatabaseService } from 'src/database/database.service';
 
+type PushPayload = {
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+  categoryId?: string; // e.g. 'group_invite' to show action buttons
+};
+
 @Injectable()
 export class PushService {
   private expo = new Expo();
   constructor(private prisma: DatabaseService) {}
 
-  async sendToUsers(
-    userIds: string[],
-    msg: { title: string; body: string; data?: Record<string, unknown> },
-  ) {
-    if (!userIds.length) return;
+  async sendToUsers(userIds: string[], msg: PushPayload) {
+    const tokens = await this.getTokens(userIds);
+
+    await this.send(
+      tokens.map((to) => ({
+        to,
+        sound: 'default',
+        channelId: 'default',
+        priority: 'high',
+        ...msg,
+      })),
+    );
+  }
+
+  /**
+   * Data-only push: no OS-rendered notification. The app's background task
+   * receives it and decides what to display (e.g. via scheduleNotificationAsync).
+   */
+  async sendDataOnlyToUsers(userIds: string[], msg: PushPayload) {
+    const tokens = await this.getTokens(userIds);
+
+    const { title, body, categoryId, data } = msg;
+
+    await this.send(
+      tokens.map((to) => ({
+        to,
+        priority: 'high', // Android: deliver promptly
+        // Everything goes under `data` so the background task can read it
+        data: { title, body, categoryId, ...data },
+      })),
+    );
+  }
+
+  private async getTokens(userIds: string[]): Promise<string[]> {
+    if (!userIds.length) return [];
 
     const devices = await this.prisma.deviceToken.findMany({
       where: { userId: { in: userIds } },
     });
 
-    const messages: (ExpoPushMessage & { _token: string })[] = devices
-      .filter((d) => Expo.isExpoPushToken(d.token))
-      .map((d) => ({
-        to: d.token,
-        _token: d.token,
-        sound: 'default',
-        channelId: 'default',
-        ...msg,
-      }));
+    return devices.map((d) => d.token).filter((t) => Expo.isExpoPushToken(t));
+  }
+
+  private async send(messages: ExpoPushMessage[]) {
+    console.log('push messages', JSON.stringify(messages, null, 2));
 
     for (const chunk of this.expo.chunkPushNotifications(messages)) {
       const tickets = await this.expo.sendPushNotificationsAsync(chunk);
-
+      console.log('push tickets', JSON.stringify(tickets, null, 2));
       // Clean up tokens for uninstalled apps
       const dead = tickets
         .map((t, i) =>
           t.status === 'error' && t.details?.error === 'DeviceNotRegistered'
-            ? (chunk[i] as any).to
+            ? (chunk[i].to as string)
             : null,
         )
-        .filter(Boolean);
+        .filter((t): t is string => t !== null);
 
       if (dead.length) {
         await this.prisma.deviceToken.deleteMany({
