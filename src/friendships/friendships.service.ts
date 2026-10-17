@@ -122,6 +122,10 @@ export class FriendshipsService {
       this.push.sendToUsers([receiverId], {
         title: 'New Friend Request',
         body: `${response.sender.name} wants to be your firend`,
+        categoryId: 'friend_request',
+        data: {
+          type: SseEventType.FRIEND_REQUEST_RECEIVED,
+        },
       });
 
       return response;
