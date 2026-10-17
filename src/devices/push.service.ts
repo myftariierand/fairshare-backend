@@ -59,11 +59,8 @@ export class PushService {
   }
 
   private async send(messages: ExpoPushMessage[]) {
-    console.log('push messages', JSON.stringify(messages, null, 2));
-
     for (const chunk of this.expo.chunkPushNotifications(messages)) {
       const tickets = await this.expo.sendPushNotificationsAsync(chunk);
-      console.log('push tickets', JSON.stringify(tickets, null, 2));
       // Clean up tokens for uninstalled apps
       const dead = tickets
         .map((t, i) =>
