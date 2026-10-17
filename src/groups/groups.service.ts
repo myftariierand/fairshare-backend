@@ -305,18 +305,7 @@ export class GroupsService {
         `${response.sender.name} invites you to join ${response.group.name}`,
       );
 
-      await this.push.sendToUsers([receiverId], {
-        title: response.group.name,
-        body: `${response.sender.name} invites you to join this group`,
-        categoryId: 'group_invite',
-        data: {
-          type: SseEventType.GROUP_INVITE_RECEIVED,
-          inviteId: response.id,
-          groupId: response.group.id,
-        },
-      });
-
-      // this.push.sendDataOnlyToUsers([userId], {
+      // await this.push.sendToUsers([receiverId], {
       //   title: response.group.name,
       //   body: `${response.sender.name} invites you to join this group`,
       //   categoryId: 'group_invite',
@@ -326,6 +315,17 @@ export class GroupsService {
       //     groupId: response.group.id,
       //   },
       // });
+
+      this.push.sendDataOnlyToUsers([receiverId], {
+        title: response.group.name,
+        body: `${response.sender.name} invites you to join this group`,
+        categoryId: 'group_invite',
+        data: {
+          type: SseEventType.GROUP_INVITE_RECEIVED,
+          inviteId: response.id,
+          groupId: response.group.id,
+        },
+      });
 
       return response;
     } catch (error) {
