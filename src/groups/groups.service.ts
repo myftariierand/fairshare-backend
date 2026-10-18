@@ -305,17 +305,6 @@ export class GroupsService {
         `${response.sender.name} invites you to join ${response.group.name}`,
       );
 
-      // await this.push.sendToUsers([receiverId], {
-      //   title: response.group.name,
-      //   body: `${response.sender.name} invites you to join this group`,
-      //   categoryId: 'group_invite',
-      //   data: {
-      //     type: SseEventType.GROUP_INVITE_RECEIVED,
-      //     inviteId: response.id,
-      //     groupId: response.group.id,
-      //   },
-      // });
-
       this.push.sendDataOnlyToUsers([receiverId], {
         title: response.group.name,
         body: `${response.sender.name} invites you to join this group`,
@@ -375,7 +364,7 @@ export class GroupsService {
         data: {
           status: 'ACCEPTED',
         },
-        include: { receiver: true },
+        include: { receiver: true, sender: true },
       });
 
       await this.activityLogsService.createActivityLog({
@@ -405,6 +394,24 @@ export class GroupsService {
         `${invitation.receiver.name} joined ${group.name}`,
       );
 
+      this.push.sendToUsers([invitation.senderId], {
+        title: `${invitation.receiver.name} joined ${group.name}`,
+        body: `${invitation.receiver.name} accepted your invitation`,
+        data: {
+          type: SseEventType.GROUP_INVITE_ACCEPTED,
+          groupId: group.id,
+        },
+      });
+
+      this.push.sendToUsers(membersIds, {
+        title: `${invitation.receiver.name} joined ${group.name}`,
+        body: `Invited by ${invitation.sender.name}`,
+        data: {
+          type: SseEventType.GROUP_JOINED,
+          groupId: group.id,
+        },
+      });
+
       return group;
     } catch (error) {
       console.log(error);
@@ -430,9 +437,18 @@ export class GroupsService {
 
       this.sse.emit(
         [invite.senderId],
-        SseEventType.GROUP_INVITE_ACCEPTED,
+        SseEventType.GROUP_INVITE_REJECTED,
         `${invite.receiver.name} rejected invitation to ${invite.group.name}`,
       );
+
+      this.push.sendToUsers([invite.senderId], {
+        title: `Group Invitation Rejected`,
+        body: `${invite.receiver.name} rejected invitation to ${invite.group.name}`,
+        data: {
+          type: SseEventType.GROUP_INVITE_REJECTED,
+          groupId: invite.group.id,
+        },
+      });
 
       return invite;
     } catch (error) {
