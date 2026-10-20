@@ -519,6 +519,12 @@ export class GroupsService {
         throw new ForbiddenException('You are not the owner of this group.');
       }
 
+      if (memberId === group.createdById) {
+        throw new ForbiddenException(
+          'Group admin cannot be removed from the group.',
+        );
+      }
+
       // const transactions = await this.prisma.transaction.findMany({
       //   where: {
       //     groupId,
