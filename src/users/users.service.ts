@@ -42,6 +42,7 @@ export class UsersService {
     const res = this.prisma.user.findMany({
       where: {
         id: { not: userId },
+        role: 'USER',
         OR: [
           { AND: [{ name: { contains: q, mode: 'insensitive' } }] },
           { AND: [{ email: { contains: q, mode: 'insensitive' } }] },
