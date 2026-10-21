@@ -38,19 +38,30 @@ export class UsersService {
     offset: number,
     groupId?: string,
   ) {
+    const q = query.trim();
     const res = this.prisma.user.findMany({
       where: {
+        id: { not: userId },
         OR: [
-          { AND: [{ name: { contains: query } }, { id: { not: userId } }] },
-          { AND: [{ email: { contains: query } }, { id: { not: userId } }] },
+          { AND: [{ name: { contains: q, mode: 'insensitive' } }] },
+          { AND: [{ email: { contains: q, mode: 'insensitive' } }] },
         ],
       },
+      include: {
+        friendshipsReceiver: {
+          where: { senderId: userId },
+          select: { id: true, status: true },
+        },
+        ...(groupId && {
+          invitationReceiver: {
+            where: { groupId },
+            select: { id: true, status: true },
+          },
+        }),
+      },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
       take: limit,
       skip: offset,
-      include: {
-        friendshipsReceiver: { where: { OR: [{ senderId: userId }] } },
-        invitationReceiver: { where: { groupId } },
-      },
     });
 
     return res;
