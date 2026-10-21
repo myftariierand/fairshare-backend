@@ -20,7 +20,7 @@ export class AdminService {
         transactions: {
           where: { type: 'EXPENSE' },
           orderBy: { createdAt: 'desc' },
-          include: { paidBy: { omit: { password: true } } },
+          include: { paidBy: true },
         },
         _count: { select: { transactions: true, members: true } },
       },
@@ -47,8 +47,8 @@ export class AdminService {
           createdAt: 'desc',
         },
         include: {
-          user: { omit: { password: true } },
-          targetUser: { omit: { password: true } },
+          user: true,
+          targetUser: true,
         },
       }),
 
@@ -86,7 +86,6 @@ export class AdminService {
           },
         },
       },
-      omit: { password: true },
     });
   }
 

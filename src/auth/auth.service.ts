@@ -51,7 +51,10 @@ export class AuthService {
     refreshToken?: string;
     user?: Omit<User, 'password'>;
   }> {
-    const user = await this.usersService.findUnique({ email: loginDto.email });
+    const user = await this.usersService.findUnique(
+      { email: loginDto.email },
+      { omit: { password: false } },
+    );
 
     if (!user)
       throw new NotFoundException(
@@ -193,8 +196,6 @@ export class AuthService {
   }
 
   async getProfile(id: string) {
-    console.log(id);
-
     const user = (await this.usersService.findUnique(
       { id },
       {
@@ -236,7 +237,6 @@ export class AuthService {
             },
           },
         },
-        omit: { password: true },
       },
     )) as Prisma.UserGetPayload<{
       include: {
@@ -300,7 +300,10 @@ export class AuthService {
       );
     }
 
-    const user = await this.usersService.findUnique({ id: userId });
+    const user = await this.usersService.findUnique(
+      { id: userId },
+      { omit: { password: false } },
+    );
 
     if (!user) {
       throw new HttpException(
@@ -456,7 +459,10 @@ export class AuthService {
   }
 
   async loginAdmin(loginDto: LoginDto, response: Response) {
-    const user = await this.usersService.findUnique({ email: loginDto.email });
+    const user = await this.usersService.findUnique(
+      { email: loginDto.email },
+      { omit: { password: false } },
+    );
 
     // Generic message on purpose — don't leak whether the email exists or
     // whether it exists-but-isn't-an-admin. Both are useful signal to an attacker.
