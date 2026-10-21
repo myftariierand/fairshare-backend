@@ -111,6 +111,10 @@ export class GroupsService {
         };
 
         return transformedResponse;
+      } else {
+        return new ForbiddenException(
+          "This group doesn't exist or you are not a member yet.",
+        );
       }
     } catch (error) {
       throw new InternalServerErrorException(error);
