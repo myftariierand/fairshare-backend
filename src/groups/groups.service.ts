@@ -235,8 +235,6 @@ export class GroupsService {
         include: { createdBy: true, members: { where: { NOT: { userId } } } },
       });
 
-      console.log(response);
-
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_DELETED',
         snapshot: { group: response },

@@ -123,18 +123,19 @@ model ActivityLog {
   createdAt     DateTime       @default(now())
   action        ActivityAction
   snapshot      Json?
-  userId        String
-  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId        String?
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   groupId       String?
   group         Group?         @relation(fields: [groupId], references: [id], onDelete: SetNull)
   transactionId String?
   transaction   Transaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull)
   targetUserId  String?
-  targetUser    User?          @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
+  targetUser    User?          @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([groupId])
   @@index([transactionId])
+  @@index([targetUserId])
 }
 
 model Task {
