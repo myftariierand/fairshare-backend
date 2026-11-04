@@ -203,16 +203,8 @@ export class GroupsService {
         include: { members: { include: { user: true } } },
       });
 
-      // After the update: if this fails, a leftover file beats a group pointing at a missing image
       if (!newCover && removeCover && foundGroup.cover) {
-        await this.cloudinaryService
-          .deleteFile(foundGroup.cover)
-          .catch((error) =>
-            this.logger.error(
-              `Failed to delete cover ${foundGroup.cover}`,
-              error,
-            ),
-          );
+        await this.deleteCoverFile(foundGroup.cover);
       }
 
       await this.activityLogsService.createActivityLog({
@@ -243,6 +235,16 @@ export class GroupsService {
     }
   }
 
+  // Runs once the database change is saved. If it fails, a leftover file is better than
+  // failing a change that already happened, so it's only logged.
+  private async deleteCoverFile(publicId: string) {
+    try {
+      await this.cloudinaryService.deleteFile(publicId);
+    } catch (error) {
+      this.logger.error(`Failed to delete cover ${publicId}`, error);
+    }
+  }
+
   async delete(userId: string, groupId: string) {
     try {
       const response = await this.prisma.group.delete({
@@ -252,6 +254,8 @@ export class GroupsService {
         },
         include: { createdBy: true, members: { where: { NOT: { userId } } } },
       });
+
+      if (response.cover) await this.deleteCoverFile(response.cover);
 
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_DELETED',
