@@ -128,6 +128,7 @@ export class GroupsService {
     userId: string,
     groupCreateInput: Prisma.GroupCreateWithoutCreatedByInput,
     coverImage: Express.Multer.File,
+    inviteIds: string[] = [],
   ) {
     if (coverImage) {
       const uploadResult = await this.cloudinaryService.uploadFile(coverImage);
@@ -166,7 +167,18 @@ export class GroupsService {
       group: { connect: { id: group.id } },
     });
 
-    return group;
+    // The group exists at this point, so a failed invite doesn't fail the request
+    const receiverIds = [...new Set(inviteIds)].filter((id) => id !== userId);
+    const invites = await Promise.allSettled(
+      receiverIds.map((receiverId) =>
+        this.invite(userId, group.id, receiverId),
+      ),
+    );
+    const failedInvites = invites.filter(
+      (result) => result.status === 'rejected' || !result.value,
+    ).length;
+
+    return { ...group, failedInvites };
   }
 
   async update(

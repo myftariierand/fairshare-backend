@@ -4,6 +4,11 @@ import { createZodDto } from 'nestjs-zod';
 const CreateGroupSchema = z.object({
   name: z.string(),
   currency: z.string(),
+  // User ids to invite. Multipart gives a single value as a string, several as an array
+  invite: z
+    .union([z.string().uuid(), z.string().uuid().array()])
+    .optional()
+    .transform((value) => (value === undefined ? [] : [value].flat())),
 });
 
 export class CreateGroupDto extends createZodDto(CreateGroupSchema) {}

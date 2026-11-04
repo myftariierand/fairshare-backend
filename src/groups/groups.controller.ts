@@ -56,10 +56,10 @@ export class GroupsController {
   @UseInterceptors(FileInterceptor('cover'))
   createGroup(
     @UserId() userId,
-    @Body() createGroupDto: CreateGroupDto,
+    @Body() { invite, ...createGroupDto }: CreateGroupDto,
     @UploadedFile() cover: Express.Multer.File,
   ) {
-    return this.groupsService.create(userId, createGroupDto, cover);
+    return this.groupsService.create(userId, createGroupDto, cover, invite);
   }
 
   @Patch(':groupId')
