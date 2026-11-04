@@ -67,10 +67,16 @@ export class GroupsController {
   updateGroup(
     @UserId() userId,
     @Param() { groupId }: UpdateParamsDto,
-    @Body() updateGroupDto: UpdateGroupDto,
+    @Body() { removeCover, ...updateGroupDto }: UpdateGroupDto,
     @UploadedFile() cover: Express.Multer.File,
   ) {
-    return this.groupsService.update(userId, groupId, updateGroupDto, cover);
+    return this.groupsService.update(
+      userId,
+      groupId,
+      updateGroupDto,
+      cover,
+      removeCover,
+    );
   }
 
   @Delete(':groupId')

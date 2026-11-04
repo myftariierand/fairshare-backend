@@ -15,6 +15,11 @@ export class UpdateParamsDto extends createZodDto(UpdateParamsSchema) {}
 const UpdateGroupSchema = z.object({
   name: z.string(),
   currency: z.string(),
+  // Sent as text because the update request is multipart
+  removeCover: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => value === 'true'),
 });
 
 export class UpdateGroupDto extends createZodDto(UpdateGroupSchema) {}

@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { Prisma, Group } from '@prisma/client';
 
@@ -20,6 +21,8 @@ import { BalanceUtil } from 'src/helpers/balance.util';
 
 @Injectable()
 export class GroupsService {
+  private readonly logger = new Logger(GroupsService.name);
+
   constructor(
     private sse: SseService,
     private prisma: DatabaseService,
@@ -171,6 +174,7 @@ export class GroupsService {
     groupId: string,
     updateGroupDto: Prisma.GroupUpdateInput,
     newCover: Express.Multer.File,
+    removeCover = false,
   ) {
     try {
       const foundGroup = await this.prisma.group.findUnique({
@@ -186,6 +190,8 @@ export class GroupsService {
 
         const uploadResult = await this.cloudinaryService.uploadFile(newCover);
         updateGroupDto.cover = uploadResult.public_id;
+      } else if (removeCover) {
+        updateGroupDto.cover = null;
       }
 
       const response = await this.prisma.group.update({
@@ -196,6 +202,18 @@ export class GroupsService {
         data: updateGroupDto,
         include: { members: { include: { user: true } } },
       });
+
+      // After the update: if this fails, a leftover file beats a group pointing at a missing image
+      if (!newCover && removeCover && foundGroup.cover) {
+        await this.cloudinaryService
+          .deleteFile(foundGroup.cover)
+          .catch((error) =>
+            this.logger.error(
+              `Failed to delete cover ${foundGroup.cover}`,
+              error,
+            ),
+          );
+      }
 
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_UPDATED',
