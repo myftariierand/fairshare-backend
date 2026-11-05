@@ -18,6 +18,7 @@ import { Cookies, Public } from 'src/auth/auth.decorators';
 
 import {
   ChangePasswordDto,
+  ForgotPasswordDto,
   GoogleMobileLoginDto,
   LoginDto,
   RegisterDto,
@@ -117,7 +118,7 @@ export class AuthController {
   @ThrottleByClient(5)
   @ThrottleByEmail(3)
   @Post('forgot-password')
-  async forgotPassword(@Body('email') email: string) {
+  async forgotPassword(@Body() { email }: ForgotPasswordDto) {
     return this.authService.forgotPassword(email);
   }
 

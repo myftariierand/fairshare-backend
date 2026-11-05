@@ -12,6 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Prisma, Role, User } from '@prisma/client';
 import { Request, Response } from 'express';
 import * as bcrypt from 'bcrypt';
+import { createHash } from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 
 import { LoginDto, RegisterDto } from 'src/auth/schema';
@@ -382,14 +383,41 @@ export class AuthService {
     return res.redirect(process.env.CLIENT_ORIGIN || '/');
   }
 
-  async forgotPassword(email: string) {
-    const user = await this.usersService.findUnique({
-      email: email.trim().toLowerCase(),
+  // Goes inside reset tokens. It stops matching as soon as the password changes, which makes every
+  // reset link single use and cancels older links, with nothing extra to store. It's keyed because
+  // anyone holding the link can read the token.
+  private passwordFingerprint(password: string | null) {
+    return createHash('sha256')
+      .update(`${process.env.RESET_PASSWORD_SECRET}:${password ?? ''}`)
+      .digest('base64url');
+  }
+
+  private async verifyResetTokenForUser(token: string) {
+    const decoded = await this.jwtService.verifyAsync(token, {
+      secret: process.env.RESET_PASSWORD_SECRET,
     });
+
+    const user = await this.usersService.findUnique(
+      { id: decoded.id },
+      { omit: { password: false } },
+    );
+
+    if (!user || decoded.pwd !== this.passwordFingerprint(user.password)) {
+      throw new ForbiddenException('Invalid or expired token');
+    }
+
+    return user;
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.usersService.findUnique(
+      { email: email.trim().toLowerCase() },
+      { omit: { password: false } },
+    );
 
     if (user) {
       const resetToken = await this.jwtService.signAsync(
-        { id: user.id },
+        { id: user.id, pwd: this.passwordFingerprint(user.password) },
         {
           secret: process.env.RESET_PASSWORD_SECRET,
           expiresIn: '1h',
@@ -428,24 +456,16 @@ export class AuthService {
     }
 
     try {
-      const decoded = await this.jwtService.verifyAsync(token, {
-        secret: process.env.RESET_PASSWORD_SECRET,
-      });
-
-      const user = await this.usersService.findUnique({ id: decoded.id });
-
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
+      const user = await this.verifyResetTokenForUser(token);
 
       const hashedPwd = await bcrypt.hash(newPassword, 10);
 
       await this.prisma.user.update({
-        where: { id: decoded.id },
+        where: { id: user.id },
         data: { password: hashedPwd },
       });
 
-      await this.refreshTokens.revokeAll(decoded.id);
+      await this.refreshTokens.revokeAll(user.id);
 
       return { message: 'Password reset successfully' };
     } catch (error: any) {
@@ -455,9 +475,7 @@ export class AuthService {
 
   async verifyResetToken(token: string) {
     try {
-      await this.jwtService.verifyAsync(token, {
-        secret: process.env.RESET_PASSWORD_SECRET,
-      });
+      await this.verifyResetTokenForUser(token);
 
       return { valid: true };
     } catch (error: any) {
