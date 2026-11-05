@@ -7,7 +7,10 @@ import {
   Patch,
   Post,
   Put,
+  UseGuards,
 } from '@nestjs/common';
+
+import { GroupMemberGuard } from 'src/groups/group-member.guard';
 
 import { UserId } from 'src/users/user.decorator';
 
@@ -19,6 +22,7 @@ import {
 } from 'src/schema/tasks';
 
 @Controller('groups/:groupId/tasks')
+@UseGuards(GroupMemberGuard)
 export class TasksController {
   constructor(private tasksService: TasksService) {}
 
