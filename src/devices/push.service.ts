@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 
 import { DatabaseService } from 'src/database/database.service';
@@ -12,21 +12,18 @@ type PushPayload = {
 
 @Injectable()
 export class PushService {
+  private readonly logger = new Logger(PushService.name);
   private expo = new Expo();
   constructor(private prisma: DatabaseService) {}
 
   async sendToUsers(userIds: string[], msg: PushPayload) {
-    const tokens = await this.getTokens(userIds);
-
-    await this.send(
-      tokens.map((to) => ({
-        to,
-        sound: 'default',
-        channelId: 'default',
-        priority: 'high',
-        ...msg,
-      })),
-    );
+    await this.deliver(userIds, (to) => ({
+      to,
+      sound: 'default',
+      channelId: 'default',
+      priority: 'high',
+      ...msg,
+    }));
   }
 
   /**
@@ -34,18 +31,29 @@ export class PushService {
    * receives it and decides what to display (e.g. via scheduleNotificationAsync).
    */
   async sendDataOnlyToUsers(userIds: string[], msg: PushPayload) {
-    const tokens = await this.getTokens(userIds);
-
     const { title, body, categoryId, data } = msg;
 
-    await this.send(
-      tokens.map((to) => ({
-        to,
-        priority: 'high', // Android: deliver promptly
-        // Everything goes under `data` so the background task can read it
-        data: { title, body, categoryId, ...data },
-      })),
-    );
+    await this.deliver(userIds, (to) => ({
+      to,
+      priority: 'high', // Android: deliver promptly
+      // Everything goes under `data` so the background task can read it
+      data: { title, body, categoryId, ...data },
+    }));
+  }
+
+  // Callers don't wait for pushes and have already saved their change, so this never rejects:
+  // a notification that can't be sent is logged, not an error for the request or the process.
+  private async deliver(
+    userIds: string[],
+    toMessage: (token: string) => ExpoPushMessage,
+  ) {
+    try {
+      const tokens = await this.getTokens(userIds);
+
+      await this.send(tokens.map(toMessage));
+    } catch (error) {
+      this.logger.error('Failed to send push notifications', error);
+    }
   }
 
   private async getTokens(userIds: string[]): Promise<string[]> {
@@ -60,20 +68,25 @@ export class PushService {
 
   private async send(messages: ExpoPushMessage[]) {
     for (const chunk of this.expo.chunkPushNotifications(messages)) {
-      const tickets = await this.expo.sendPushNotificationsAsync(chunk);
-      // Clean up tokens for uninstalled apps
-      const dead = tickets
-        .map((t, i) =>
-          t.status === 'error' && t.details?.error === 'DeviceNotRegistered'
-            ? (chunk[i].to as string)
-            : null,
-        )
-        .filter((t): t is string => t !== null);
+      try {
+        const tickets = await this.expo.sendPushNotificationsAsync(chunk);
+        // Clean up tokens for uninstalled apps
+        const dead = tickets
+          .map((t, i) =>
+            t.status === 'error' && t.details?.error === 'DeviceNotRegistered'
+              ? (chunk[i].to as string)
+              : null,
+          )
+          .filter((t): t is string => t !== null);
 
-      if (dead.length) {
-        await this.prisma.deviceToken.deleteMany({
-          where: { token: { in: dead } },
-        });
+        if (dead.length) {
+          await this.prisma.deviceToken.deleteMany({
+            where: { token: { in: dead } },
+          });
+        }
+      } catch (error) {
+        // One failed chunk shouldn't stop the others
+        this.logger.error('Failed to send a push notification chunk', error);
       }
     }
   }

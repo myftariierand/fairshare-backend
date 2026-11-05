@@ -31,11 +31,7 @@ export class CloudinaryService {
   }
 
   async deleteFile(publicId: string): Promise<CloudinaryResponse> {
-    return new Promise<CloudinaryResponse>((resolve, reject) => {
-      cloudinary.uploader.destroy(publicId, (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      });
-    });
+    // With a callback the SDK still rejects its own promise, which nothing would be handling
+    return cloudinary.uploader.destroy(publicId);
   }
 }
