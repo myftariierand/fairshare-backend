@@ -15,6 +15,7 @@ import { DatabaseService } from 'src/database/database.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { PushService } from 'src/devices/push.service';
+import { GroupDebtService } from 'src/group-debt/groupDebt.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -30,6 +31,7 @@ export class GroupsService {
     private activityLogsService: ActivityLogsService,
     private cloudinaryService: CloudinaryService,
     private push: PushService,
+    private groupDebtService: GroupDebtService,
   ) {}
 
   async findMany(userId: string) {
@@ -76,12 +78,8 @@ export class GroupsService {
       if (response) {
         const balances = BalanceUtil.calculateGroupBalances(
           response.transactions,
-          response.members.map((member) => member.user),
         );
-        const settlements = BalanceUtil.simplifyBalances(
-          balances,
-          response.transactions,
-        );
+        const settlements = BalanceUtil.simplifyBalances(response.transactions);
 
         const transactions = response.transactions.map((t) => {
           const userSplit = t.splits.find((split) => split.userId === userId);
@@ -606,29 +604,11 @@ export class GroupsService {
         );
       }
 
-      // const transactions = await this.prisma.transaction.findMany({
-      //   where: {
-      //     groupId,
-      //     OR: [
-      //       { paidById: memberId },
-      //       { splits: { some: { userId: memberId } } },
-      //     ],
-      //   },
-      //   include: {
-      //     splits: {
-      //       include: { user: { select: { id: true, name: true } } },
-      //     },
-      //     paidBy: { select: { id: true, name: true } },
-      //   },
-      // });
-
-      // const balances = this.calculateBalances(transactions);
-
-      // if (balances.memberId && balances[memberId].balance.toNumber() !== 0) {
-      //   throw new ForbiddenException(
-      //     'This member cannot be removed until all balances are settled.',
-      //   );
-      // }
+      if (await this.groupDebtService.hasOpenDebts(groupId, memberId)) {
+        throw new ForbiddenException(
+          'This member cannot be removed until all balances are settled.',
+        );
+      }
 
       const member = await this.prisma.groupMember.findUnique({
         where: {
@@ -700,26 +680,11 @@ export class GroupsService {
   }
 
   async leaveGroup(userId: string, groupId: string): Promise<Group> {
-    // const transactions = await this.prisma.transaction.findMany({
-    //   where: {
-    //     groupId,
-    //     OR: [{ paidById: userId }, { splits: { some: { userId: userId } } }],
-    //   },
-    //   include: {
-    //     splits: {
-    //       include: { user: { select: { id: true, name: true } } },
-    //     },
-    //     paidBy: { select: { id: true, name: true } },
-    //   },
-    // });
-
-    // const balances = this.calculateBalances(transactions);
-
-    // if (balances.memberId && balances[userId].balance.toNumber() !== 0) {
-    //   throw new ForbiddenException(
-    //     'You cannot leave this group until all balances are settled.',
-    //   );
-    // }
+    if (await this.groupDebtService.hasOpenDebts(groupId, userId)) {
+      throw new ForbiddenException(
+        'You cannot leave this group until all balances are settled.',
+      );
+    }
 
     const member = await this.prisma.groupMember.delete({
       where: { groupId_userId: { groupId, userId } },

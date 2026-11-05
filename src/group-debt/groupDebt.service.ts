@@ -14,11 +14,6 @@ export class GroupDebtService {
         id: groupId,
       },
       include: {
-        members: {
-          include: {
-            user: true,
-          },
-        },
         transactions: {
           include: {
             splits: {
@@ -39,7 +34,6 @@ export class GroupDebtService {
             },
           },
         },
-        createdBy: true,
       },
     });
 
@@ -47,12 +41,13 @@ export class GroupDebtService {
       return null;
     }
 
-    const balances = BalanceUtil.calculateGroupBalances(
-      group.transactions,
-      group.members.map((m) => m.user),
-    );
+    return BalanceUtil.simplifyBalances(group.transactions);
+  }
 
-    return BalanceUtil.simplifyBalances(balances, group.transactions);
+  async hasOpenDebts(groupId: string, userId: string) {
+    const debts = await this.getDebts(groupId);
+
+    return !!debts?.some((d) => d.from.id === userId || d.to.id === userId);
   }
 
   async updateRemainingDebts(groupId: string) {

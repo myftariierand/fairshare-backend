@@ -4,9 +4,10 @@ import { GroupsController } from 'src/groups/groups.controller';
 import { GroupsService } from 'src/groups/groups.service';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { DevicesModule } from 'src/devices/devices.modules';
+import { GroupDebtModule } from 'src/group-debt/groupDebt.module';
 
 @Module({
-  imports: [CloudinaryModule, DevicesModule],
+  imports: [CloudinaryModule, DevicesModule, GroupDebtModule],
   controllers: [GroupsController],
   providers: [GroupsService],
 })

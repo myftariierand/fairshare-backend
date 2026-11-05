@@ -1,14 +1,13 @@
-import { Prisma, User, TransactionType } from '@prisma/client';
+import { Prisma, TransactionType } from '@prisma/client';
+
+type Person = {
+  id: string;
+  name: string;
+};
 
 type Balance = {
-  from: {
-    id: string;
-    name: string;
-  };
-  to: {
-    id: string;
-    name: string;
-  };
+  from: Person;
+  to: Person;
   amount: number;
 };
 
@@ -19,49 +18,53 @@ type Transaction = Prisma.TransactionGetPayload<{
   };
 }>;
 
+// Amounts are stored with two decimals, so whole cents add up without rounding errors
+const toCents = (amount: Prisma.Decimal) => amount.mul(100).toNumber();
+
+// Names come from the transactions, not the member list: people who have left the
+// group are still part of its history
+const getPeople = (transactions: Transaction[]) => {
+  const people = new Map<string, Person>();
+
+  for (const { paidBy, splits } of transactions) {
+    people.set(paidBy.id, { id: paidBy.id, name: paidBy.name });
+    for (const { user } of splits) {
+      people.set(user.id, { id: user.id, name: user.name });
+    }
+  }
+
+  return people;
+};
+
 export class BalanceUtil {
   // ------------------------
   // 1. Calculate raw balances
   // ------------------------
-  static calculateGroupBalances(
-    transactions: Transaction[],
-    users: User[],
-  ): Balance[] {
-    const balances: Record<string, Record<string, number>> = {};
-    const userMap: Record<string, User> = {};
+  static calculateGroupBalances(transactions: Transaction[]): Balance[] {
+    const people = getPeople(transactions);
+    const owed = new Map<string, Map<string, number>>();
 
-    for (const user of users) userMap[user.id] = user;
+    for (const { type, paidById, splits } of transactions) {
+      if (type !== TransactionType.EXPENSE) continue;
 
-    const addBalance = (from: string, to: string, amount: number) => {
-      if (!balances[from]) balances[from] = {};
-      if (!balances[to]) balances[to] = {};
-      balances[from][to] = (balances[from][to] || 0) + amount;
-    };
+      for (const { userId, amount } of splits) {
+        if (userId === paidById) continue;
 
-    for (const transaction of transactions) {
-      if (transaction.type === TransactionType.EXPENSE) {
-        for (const split of transaction.splits) {
-          if (split.userId !== transaction.paidById) {
-            addBalance(
-              split.userId,
-              transaction.paidById,
-              split.amount.toNumber(),
-            );
-          }
-        }
+        const fromUser = owed.get(userId) ?? new Map<string, number>();
+        fromUser.set(paidById, (fromUser.get(paidById) ?? 0) + toCents(amount));
+        owed.set(userId, fromUser);
       }
     }
 
     // Convert to array without netting
     const result: Balance[] = [];
-    for (const from in balances) {
-      for (const to in balances[from]) {
-        const amount = balances[from][to];
-        if (amount !== 0) {
+    for (const [from, fromUser] of owed) {
+      for (const [to, cents] of fromUser) {
+        if (cents !== 0) {
           result.push({
-            from: userMap[from],
-            to: userMap[to],
-            amount,
+            from: people.get(from)!,
+            to: people.get(to)!,
+            amount: cents / 100,
           });
         }
       }
@@ -73,27 +76,29 @@ export class BalanceUtil {
   // ------------------------
   // 2. Simplify balances
   // ------------------------
-  static simplifyBalances(
-    balances: Balance[],
-    transactions: Transaction[],
-  ): Balance[] {
-    const net: Record<string, { name: string; balance: number }> = {};
+  static simplifyBalances(transactions: Transaction[]): Balance[] {
+    const people = getPeople(transactions);
+    const net = new Map<string, number>();
 
-    for (const b of balances) {
-      if (!net[b.from.id]) net[b.from.id] = { name: b.from.name, balance: 0 };
-      if (!net[b.to.id]) net[b.to.id] = { name: b.to.name, balance: 0 };
+    // Expenses and settlements net the same way: whoever paid is up by that amount, and
+    // whoever the split names is down by it. A settlement's split is the person repaid.
+    for (const { paidById, splits } of transactions) {
+      for (const { userId, amount } of splits) {
+        if (userId === paidById) continue;
 
-      net[b.from.id].balance -= b.amount;
-      net[b.to.id].balance += b.amount;
+        const cents = toCents(amount);
+        net.set(paidById, (net.get(paidById) ?? 0) + cents);
+        net.set(userId, (net.get(userId) ?? 0) - cents);
+      }
     }
 
-    const debtors: { id: string; name: string; balance: number }[] = [];
-    const creditors: { id: string; name: string; balance: number }[] = [];
+    // Biggest amounts first, then by id, so the result doesn't depend on row order
+    const byAmount = (a: [string, number], b: [string, number]) =>
+      Math.abs(b[1]) - Math.abs(a[1]) || a[0].localeCompare(b[0]);
 
-    for (const [id, { name, balance }] of Object.entries(net)) {
-      if (balance < 0) debtors.push({ id, name, balance });
-      else if (balance > 0) creditors.push({ id, name, balance });
-    }
+    const entries = [...net.entries()].sort(byAmount);
+    const debtors = entries.filter(([, cents]) => cents < 0);
+    const creditors = entries.filter(([, cents]) => cents > 0);
 
     const simplified: Balance[] = [];
     let i = 0,
@@ -102,53 +107,21 @@ export class BalanceUtil {
     while (i < debtors.length && j < creditors.length) {
       const debtor = debtors[i];
       const creditor = creditors[j];
-      const settleAmount = Math.min(-debtor.balance, creditor.balance);
+      const settleAmount = Math.min(-debtor[1], creditor[1]);
 
       simplified.push({
-        from: { id: debtor.id, name: debtor.name },
-        to: { id: creditor.id, name: creditor.name },
-        amount: settleAmount,
+        from: people.get(debtor[0])!,
+        to: people.get(creditor[0])!,
+        amount: settleAmount / 100,
       });
 
-      debtor.balance += settleAmount;
-      creditor.balance -= settleAmount;
+      debtor[1] += settleAmount;
+      creditor[1] -= settleAmount;
 
-      if (debtor.balance === 0) i++;
-      if (creditor.balance === 0) j++;
+      if (debtor[1] === 0) i++;
+      if (creditor[1] === 0) j++;
     }
 
-    for (const tx of transactions) {
-      if (tx.type === TransactionType.SETTLEMENT) {
-        if (tx.splits.length !== 1)
-          throw new Error('Settlement must have 1 split');
-
-        const payer = tx.paidById;
-        const receiver = tx.splits[0].userId;
-        const amount = tx.amount.toNumber();
-
-        let balance = simplified.find(
-          (b) => b.from.id === payer && b.to.id === receiver,
-        );
-
-        if (balance) {
-          balance.amount = Math.max(0, balance.amount - amount);
-          continue;
-        }
-
-        balance = simplified.find(
-          (b) => b.from.id === receiver && b.to.id === payer,
-        );
-
-        if (balance) {
-          balance.amount = Math.max(0, balance.amount - amount);
-          continue;
-        }
-      }
-    }
-
-    return simplified
-      .map((b) => ({ ...b, amount: b.amount.toFixed(2) }))
-      .filter((b) => +b.amount > 0)
-      .map((b) => ({ ...b, amount: +b.amount }));
+    return simplified;
   }
 }
