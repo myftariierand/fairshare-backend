@@ -55,41 +55,56 @@ export class OtpService {
   }
 
   async verifyOtp(user: User, otp: string): Promise<boolean> {
-    const record = await this.prisma.emailVerificationOtp.findUnique({
-      where: { userId: user.id },
+    const now = new Date();
+
+    // The attempt is counted before the code is checked, in one statement, so guesses sent at the
+    // same time can't all see the same count and get past the limit
+    const { count } = await this.prisma.emailVerificationOtp.updateMany({
+      where: {
+        userId: user.id,
+        expiresAt: { gte: now },
+        attempts: { lt: this.MAX_ATTEMPTS },
+      },
+      data: { attempts: { increment: 1 } },
     });
 
-    if (!record) return false;
-    if (record.expiresAt < new Date()) return false;
+    if (!count) {
+      const record = await this.prisma.emailVerificationOtp.findUnique({
+        where: { userId: user.id },
+      });
 
-    if (record.attempts >= this.MAX_ATTEMPTS) {
-      throw new ForbiddenException(
-        'Too many attempts. Please request a new code.',
-      );
+      if (record && record.expiresAt >= now) {
+        throw new ForbiddenException(
+          'Too many attempts. Please request a new code.',
+        );
+      }
+
+      return false;
     }
 
     const hashedInput = crypto.createHash('sha256').update(otp).digest('hex');
 
-    if (hashedInput !== record.otpHash) {
-      await this.prisma.emailVerificationOtp.update({
-        where: { userId: user.id },
-        data: { attempts: { increment: 1 } },
+    return this.prisma.$transaction(async (tx) => {
+      // The code is used up here, so the same code sent twice only counts once
+      const { count: matched } = await tx.emailVerificationOtp.deleteMany({
+        where: { userId: user.id, otpHash: hashedInput },
       });
-      return false;
-    }
 
-    await this.prisma.emailVerificationOtp.delete({
-      where: { userId: user.id },
-    });
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { emailVerified: true },
-    });
-    await this.activityLogsService.createActivityLog({
-      user: { connect: { id: user.id } },
-      action: 'USER_EMAIL_VERIFIED',
-    });
+      if (!matched) return false;
 
-    return true;
+      await tx.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true },
+      });
+      await this.activityLogsService.createActivityLog(
+        {
+          user: { connect: { id: user.id } },
+          action: 'USER_EMAIL_VERIFIED',
+        },
+        tx,
+      );
+
+      return true;
+    });
   }
 }

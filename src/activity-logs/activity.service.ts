@@ -56,8 +56,12 @@ export class ActivityLogsService {
     };
   }
 
-  async createActivityLog(data: Prisma.ActivityLogCreateInput) {
-    return this.prisma.activityLog.create({
+  // Pass the transaction the change itself runs in, so the two are saved or lost together
+  async createActivityLog(
+    data: Prisma.ActivityLogCreateInput,
+    client: Prisma.TransactionClient = this.prisma,
+  ) {
+    return client.activityLog.create({
       data,
     });
   }

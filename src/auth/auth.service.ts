@@ -144,11 +144,12 @@ export class AuthService {
     request: Request<{ headers: { 'x-client': string } }>,
   ) {
     try {
-      const user = await this.usersService.create({ email, name, password });
-
-      await this.activityLogsService.createActivityLog({
-        action: 'USER_REGISTERED',
-        user: { connect: { id: user.id } },
+      const user = await this.usersService.create({
+        email,
+        name,
+        password,
+        // Written in the same statement, so the two are saved or lost together
+        activityLog: { create: { action: 'USER_REGISTERED' } },
       });
 
       try {
@@ -345,30 +346,40 @@ export class AuthService {
 
     const hashedPwd = await bcrypt.hash(newPassword, 10);
 
-    const res = await this.prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPwd },
+    return this.prisma.$transaction(async (tx) => {
+      const res = await tx.user.update({
+        where: { id: userId },
+        data: { password: hashedPwd },
+      });
+
+      await this.refreshTokens.revokeAll(userId, currentRefreshToken, tx);
+
+      await this.activityLogsService.createActivityLog(
+        {
+          action: 'USER_CHANGED_PASSWORD',
+          user: { connect: { id: userId } },
+        },
+        tx,
+      );
+
+      return res;
     });
-
-    await this.refreshTokens.revokeAll(userId, currentRefreshToken);
-
-    await this.activityLogsService.createActivityLog({
-      action: 'USER_CHANGED_PASSWORD',
-      user: { connect: { id: userId } },
-    });
-
-    return res;
   }
 
   async updateProfile(id: string, data: Prisma.UserUpdateInput): Promise<User> {
-    const user = await this.prisma.user.update({ where: { id }, data });
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({ where: { id }, data });
 
-    await this.activityLogsService.createActivityLog({
-      action: 'USER_UPDATED_PROFILE',
-      user: { connect: { id } },
+      await this.activityLogsService.createActivityLog(
+        {
+          action: 'USER_UPDATED_PROFILE',
+          user: { connect: { id } },
+        },
+        tx,
+      );
+
+      return user;
     });
-
-    return user;
   }
 
   async googleLogin(user: User, res: Response) {
@@ -460,12 +471,14 @@ export class AuthService {
 
       const hashedPwd = await bcrypt.hash(newPassword, 10);
 
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { password: hashedPwd },
-      });
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { password: hashedPwd },
+        });
 
-      await this.refreshTokens.revokeAll(user.id);
+        await this.refreshTokens.revokeAll(user.id, undefined, tx);
+      });
 
       return { message: 'Password reset successfully' };
     } catch (error: any) {

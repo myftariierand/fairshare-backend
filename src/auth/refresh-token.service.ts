@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 
 import { DatabaseService } from 'src/database/database.service';
@@ -151,14 +151,18 @@ export class RefreshTokenService {
 
   // Keeps the session behind exceptToken, so changing a password doesn't log out the person
   // doing it
-  async revokeAll(userId: string, exceptToken?: unknown) {
+  async revokeAll(
+    userId: string,
+    exceptToken?: unknown,
+    client: Prisma.TransactionClient = this.prisma,
+  ) {
     const keep =
       parseSessionId(exceptToken) &&
-      (await this.prisma.refreshToken.findUnique({
+      (await client.refreshToken.findUnique({
         where: { tokenHash: hash(exceptToken as string) },
       }));
 
-    await this.prisma.refreshToken.deleteMany({
+    await client.refreshToken.deleteMany({
       where: {
         userId,
         ...(keep && keep.userId === userId
