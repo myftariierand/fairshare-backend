@@ -8,6 +8,14 @@ import { Prisma, User } from '@prisma/client';
 
 import { renderTemplate } from 'templates/render-template';
 
+const MIN_SEARCH_LENGTH = 2;
+
+const maskEmail = (email: string) => {
+  const [local, domain] = email.split('@');
+
+  return `${local[0]}***@${domain}`;
+};
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -16,10 +24,6 @@ export class UsersService {
     private prisma: DatabaseService,
     private emailService: EmailService,
   ) {}
-
-  async findMany(): Promise<User[]> {
-    return this.prisma.user.findMany();
-  }
 
   async findUnique(
     userWhereUniqueInput: Prisma.UserWhereUniqueInput,
@@ -39,21 +43,34 @@ export class UsersService {
     groupId?: string,
   ) {
     const q = query.trim();
-    const res = this.prisma.user.findMany({
+
+    if (q.length < MIN_SEARCH_LENGTH) return [];
+
+    const canSeeInvitations =
+      groupId &&
+      (await this.prisma.groupMember.findUnique({
+        where: { groupId_userId: { groupId, userId } },
+      }));
+
+    const users = await this.prisma.user.findMany({
       where: {
         id: { not: userId },
         role: 'USER',
         OR: [
-          { AND: [{ name: { contains: q, mode: 'insensitive' } }] },
-          { AND: [{ email: { contains: q, mode: 'insensitive' } }] },
+          { name: { contains: q, mode: 'insensitive' } },
+          // From the start only, so a search for "@gmail.com" can't list everyone on Gmail
+          { email: { startsWith: q, mode: 'insensitive' } },
         ],
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
         friendshipsReceiver: {
           where: { senderId: userId },
           select: { id: true, status: true },
         },
-        ...(groupId && {
+        ...(canSeeInvitations && {
           invitationReceiver: {
             where: { groupId },
             select: { id: true, status: true },
@@ -65,7 +82,14 @@ export class UsersService {
       skip: offset,
     });
 
-    return res;
+    return users.map((user) => ({
+      ...user,
+      // Whoever typed the full address already knows it
+      email:
+        user.email.toLowerCase() === q.toLowerCase()
+          ? user.email
+          : maskEmail(user.email),
+    }));
   }
 
   async create(userCreateInput: Prisma.UserCreateInput): Promise<User> {

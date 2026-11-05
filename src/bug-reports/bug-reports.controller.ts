@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body } from '@nestjs/common';
 
 import { BugReportsService } from 'src/bug-reports/bug-reports.service';
 
@@ -11,10 +11,5 @@ export class BugReportsController {
   @Post()
   create(@Body() dto: CreateBugReportDto) {
     return this.bugReportsService.create(dto);
-  }
-
-  @Get()
-  findAll() {
-    return this.bugReportsService.findAll();
   }
 }

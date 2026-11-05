@@ -43,10 +43,4 @@ export class BugReportsService {
 
     return bug;
   }
-
-  async findAll() {
-    return this.prisma.bugReport.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-  }
 }
