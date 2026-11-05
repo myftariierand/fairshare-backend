@@ -8,7 +8,7 @@ import { BalanceUtil } from 'src/helpers/balance.util';
 export class GroupDebtService {
   constructor(private readonly prisma: DatabaseService) {}
 
-  async updateRemainingDebts(groupId: string) {
+  async getDebts(groupId: string) {
     const group = await this.prisma.group.findUnique({
       where: {
         id: groupId,
@@ -52,15 +52,20 @@ export class GroupDebtService {
       group.members.map((m) => m.user),
     );
 
-    const settlements = BalanceUtil.simplifyBalances(
-      balances,
-      group.transactions,
-    );
+    return BalanceUtil.simplifyBalances(balances, group.transactions);
+  }
+
+  async updateRemainingDebts(groupId: string) {
+    const debts = await this.getDebts(groupId);
+
+    if (!debts) {
+      return null;
+    }
 
     return this.prisma.group.update({
-      where: { id: group.id },
+      where: { id: groupId },
       data: {
-        remainingDebts: settlements.length,
+        remainingDebts: debts.length,
       },
     });
   }
