@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -116,7 +117,7 @@ export class TransactionsService {
     if (!groupMembersIds.includes(userId))
       throw new ForbiddenException('You are not a member of this group');
 
-    const userIds = splits.map((split) => split.userId);
+    const userIds = [paidBy, ...splits.map((split) => split.userId)];
     const allUsersAreMembers = userIds.every((userId) =>
       groupMembersIds.includes(userId),
     );
@@ -213,6 +214,17 @@ export class TransactionsService {
     const groupMemebersIds = foundGroup.members.map((member) => member.userId);
     if (!groupMemebersIds.includes(userId))
       throw new ForbiddenException('You are not a member of this group');
+
+    // The membership check above is only about this group, so the expense must belong to it.
+    // Settlements record a payment and can't be edited into something else.
+    const existing = await this.prisma.transaction.findFirst({
+      where: { id, groupId, type: 'EXPENSE' },
+    });
+    if (!existing) throw new NotFoundException('Transaction not found');
+
+    // Someone who has left can stay the payer of an old expense, but can't become a new one
+    if (paidBy !== existing.paidById && !groupMemebersIds.includes(paidBy))
+      throw new ForbiddenException('The payer must be a member of the group');
 
     const unitAmount = toMinorUnit(amount, foundGroup.currency);
     const splitsTotal = splits.reduce(
@@ -335,9 +347,31 @@ export class TransactionsService {
       paidBy: string;
     },
   ) {
-    try {
-      const { amount, description, groupId, paidBy } = body;
+    const { amount, description, groupId, paidBy } = body;
 
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId, members: { some: { userId } } },
+      select: { currency: true },
+    });
+    if (!group)
+      throw new ForbiddenException('You are not a member of this group');
+
+    // Only the person owed can mark a debt as paid, and for no more than what is owed
+    const debts = await this.groupDebtService.getDebts(groupId);
+    const debt = debts?.find((d) => d.from.id === paidBy && d.to.id === userId);
+    if (!debt)
+      throw new BadRequestException('This person does not owe you anything');
+
+    const unitAmount = toMinorUnit(amount, group.currency);
+    if (
+      unitAmount <= 0 ||
+      unitAmount > toMinorUnit(debt.amount, group.currency)
+    )
+      throw new BadRequestException(
+        'The amount must be more than zero and no more than what is owed',
+      );
+
+    try {
       const res = await this.prisma.transaction.create({
         data: {
           amount,
@@ -390,6 +424,8 @@ export class TransactionsService {
           );
         }
       }
+
+      throw error;
     }
   }
 }

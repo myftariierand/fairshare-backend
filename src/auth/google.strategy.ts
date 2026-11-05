@@ -27,7 +27,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       user = await this.usersService.create({
         name: profile.displayName,
         email,
-        password: '', // Not used for OAuth users
         provider: 'google',
         emailVerified: true,
       });

@@ -8,17 +8,12 @@ import { BalanceUtil } from 'src/helpers/balance.util';
 export class GroupDebtService {
   constructor(private readonly prisma: DatabaseService) {}
 
-  async updateRemainingDebts(groupId: string) {
+  async getDebts(groupId: string) {
     const group = await this.prisma.group.findUnique({
       where: {
         id: groupId,
       },
       include: {
-        members: {
-          include: {
-            user: true,
-          },
-        },
         transactions: {
           include: {
             splits: {
@@ -39,7 +34,6 @@ export class GroupDebtService {
             },
           },
         },
-        createdBy: true,
       },
     });
 
@@ -47,20 +41,26 @@ export class GroupDebtService {
       return null;
     }
 
-    const balances = BalanceUtil.calculateGroupBalances(
-      group.transactions,
-      group.members.map((m) => m.user),
-    );
+    return BalanceUtil.simplifyBalances(group.transactions);
+  }
 
-    const settlements = BalanceUtil.simplifyBalances(
-      balances,
-      group.transactions,
-    );
+  async hasOpenDebts(groupId: string, userId: string) {
+    const debts = await this.getDebts(groupId);
+
+    return !!debts?.some((d) => d.from.id === userId || d.to.id === userId);
+  }
+
+  async updateRemainingDebts(groupId: string) {
+    const debts = await this.getDebts(groupId);
+
+    if (!debts) {
+      return null;
+    }
 
     return this.prisma.group.update({
-      where: { id: group.id },
+      where: { id: groupId },
       data: {
-        remainingDebts: settlements.length,
+        remainingDebts: debts.length,
       },
     });
   }

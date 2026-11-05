@@ -8,12 +8,14 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Prisma, Group } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { PushService } from 'src/devices/push.service';
+import { GroupDebtService } from 'src/group-debt/groupDebt.service';
 
 import { SseEventType } from 'src/types/sse';
 
@@ -29,6 +31,7 @@ export class GroupsService {
     private activityLogsService: ActivityLogsService,
     private cloudinaryService: CloudinaryService,
     private push: PushService,
+    private groupDebtService: GroupDebtService,
   ) {}
 
   async findMany(userId: string) {
@@ -75,12 +78,8 @@ export class GroupsService {
       if (response) {
         const balances = BalanceUtil.calculateGroupBalances(
           response.transactions,
-          response.members.map((member) => member.user),
         );
-        const settlements = BalanceUtil.simplifyBalances(
-          balances,
-          response.transactions,
-        );
+        const settlements = BalanceUtil.simplifyBalances(response.transactions);
 
         const transactions = response.transactions.map((t) => {
           const userSplit = t.splits.find((split) => split.userId === userId);
@@ -314,6 +313,14 @@ export class GroupsService {
   }
 
   async invite(userId: string, groupId: string, receiverId: string) {
+    const membership = await this.prisma.groupMember.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this group');
+    }
+
     try {
       const response = await this.prisma.groupInvitation.create({
         data: {
@@ -368,40 +375,36 @@ export class GroupsService {
     invitationId: string,
   ) {
     try {
-      const group = await this.prisma.group.update({
-        where: {
-          id: groupId,
-        },
-        data: {
-          members: {
-            connectOrCreate: {
-              where: {
-                id: userId,
-              },
-              create: {
-                user: {
-                  connect: {
-                    id: userId,
-                  },
-                },
-              },
+      const { group, invitation } = await this.prisma.$transaction(
+        async (tx) => {
+          // Only the receiver can accept, and only while the invitation is pending
+          const invitation = await tx.groupInvitation.update({
+            where: {
+              id: invitationId,
+              groupId,
+              receiverId: userId,
+              status: 'PENDING',
             },
-          },
-        },
-        include: {
-          members: true,
-        },
-      });
+            data: {
+              status: 'ACCEPTED',
+            },
+            include: { receiver: true, sender: true },
+          });
 
-      const invitation = await this.prisma.groupInvitation.update({
-        where: {
-          id: invitationId,
+          await tx.groupMember.upsert({
+            where: { groupId_userId: { groupId, userId } },
+            create: { groupId, userId },
+            update: {},
+          });
+
+          const group = await tx.group.findUniqueOrThrow({
+            where: { id: groupId },
+            include: { members: true },
+          });
+
+          return { group, invitation };
         },
-        data: {
-          status: 'ACCEPTED',
-        },
-        include: { receiver: true, sender: true },
-      });
+      );
 
       await this.activityLogsService.createActivityLog({
         action: 'GROUP_INVITATION_ACCEPTED',
@@ -450,15 +453,22 @@ export class GroupsService {
 
       return group;
     } catch (error) {
-      console.log(error);
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new NotFoundException('Invitation not found');
+        }
+      }
+
+      throw error;
     }
   }
 
-  async rejectInvitation(invitationId: string) {
+  async rejectInvitation(userId: string, invitationId: string) {
     try {
       const invite = await this.prisma.groupInvitation.delete({
         where: {
           id: invitationId,
+          receiverId: userId,
           status: 'PENDING',
         },
         include: { receiver: true, group: true },
@@ -488,60 +498,93 @@ export class GroupsService {
 
       return invite;
     } catch (error) {
-      console.log(error);
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new NotFoundException('Invitation not found');
+        }
+      }
+
+      throw error;
     }
   }
 
-  async joinGroup(userId: string, groupId: string) {
-    try {
-      const group = await this.prisma.group.update({
-        where: {
-          id: groupId,
-        },
-        data: {
-          members: {
-            connectOrCreate: {
-              where: {
+  async getInviteLink(userId: string, groupId: string) {
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId, members: { some: { userId } } },
+      select: { inviteToken: true, createdById: true },
+    });
+
+    if (!group) throw new NotFoundException('Group not found');
+
+    return {
+      token: group.inviteToken,
+      canReset: group.createdById === userId,
+    };
+  }
+
+  async resetInviteLink(userId: string, groupId: string) {
+    const token = randomUUID();
+    const { count } = await this.prisma.group.updateMany({
+      where: { id: groupId, createdById: userId },
+      data: { inviteToken: token },
+    });
+
+    if (!count) {
+      throw new ForbiddenException('You are not the owner of this group.');
+    }
+
+    return { token, canReset: true };
+  }
+
+  async joinGroup(userId: string, token: string) {
+    const found = await this.prisma.group.findUnique({
+      where: { inviteToken: token },
+      include: { members: { include: { user: true } } },
+    });
+
+    if (!found) throw new NotFoundException('This invite link is not valid');
+
+    // Opening the link again is harmless, it just leads back to the group
+    if (found.members.some((member) => member.userId === userId)) return found;
+
+    const group = await this.prisma.group.update({
+      where: { id: found.id },
+      data: {
+        members: {
+          create: {
+            user: {
+              connect: {
                 id: userId,
-              },
-              create: {
-                user: {
-                  connect: {
-                    id: userId,
-                  },
-                },
               },
             },
           },
         },
-        include: {
-          members: { include: { user: true } },
-        },
-      });
+      },
+      include: {
+        members: { include: { user: true } },
+      },
+    });
 
-      await this.activityLogsService.createActivityLog({
-        action: 'GROUP_MEMBER_JOINED',
-        snapshot: { group },
-        user: { connect: { id: userId } },
-        group: { connect: { id: groupId } },
-      });
+    await this.activityLogsService.createActivityLog({
+      action: 'GROUP_MEMBER_JOINED',
+      snapshot: { group },
+      user: { connect: { id: userId } },
+      group: { connect: { id: group.id } },
+    });
 
-      const membersIds = group.members
-        .filter((member) => member.userId !== userId)
-        .map(({ userId }) => userId);
+    const membersIds = group.members
+      .filter((member) => member.userId !== userId)
+      .map(({ userId }) => userId);
 
-      const member = group.members.find((member) => member.userId === userId);
+    const member = group.members.find((member) => member.userId === userId);
 
-      this.sse.emit(
-        membersIds,
-        SseEventType.GROUP_JOINED,
-        `${member?.user.name} joined ${group.name}`,
-      );
+    this.sse.emit(
+      membersIds,
+      SseEventType.GROUP_JOINED,
+      `${member?.user.name} joined ${group.name}`,
+    );
 
-      return group;
-    } catch (error) {
-      console.log(error);
-    }
+    return group;
   }
 
   async removeMember(userId: string, groupId: string, memberId: string) {
@@ -561,29 +604,11 @@ export class GroupsService {
         );
       }
 
-      // const transactions = await this.prisma.transaction.findMany({
-      //   where: {
-      //     groupId,
-      //     OR: [
-      //       { paidById: memberId },
-      //       { splits: { some: { userId: memberId } } },
-      //     ],
-      //   },
-      //   include: {
-      //     splits: {
-      //       include: { user: { select: { id: true, name: true } } },
-      //     },
-      //     paidBy: { select: { id: true, name: true } },
-      //   },
-      // });
-
-      // const balances = this.calculateBalances(transactions);
-
-      // if (balances.memberId && balances[memberId].balance.toNumber() !== 0) {
-      //   throw new ForbiddenException(
-      //     'This member cannot be removed until all balances are settled.',
-      //   );
-      // }
+      if (await this.groupDebtService.hasOpenDebts(groupId, memberId)) {
+        throw new ForbiddenException(
+          'This member cannot be removed until all balances are settled.',
+        );
+      }
 
       const member = await this.prisma.groupMember.findUnique({
         where: {
@@ -602,6 +627,8 @@ export class GroupsService {
       const updatedGroup = await this.prisma.group.update({
         where: { id: groupId },
         data: {
+          // A new token, so the removed member can't come back through a saved link
+          inviteToken: randomUUID(),
           members: {
             delete: {
               groupId_userId: {
@@ -653,26 +680,11 @@ export class GroupsService {
   }
 
   async leaveGroup(userId: string, groupId: string): Promise<Group> {
-    // const transactions = await this.prisma.transaction.findMany({
-    //   where: {
-    //     groupId,
-    //     OR: [{ paidById: userId }, { splits: { some: { userId: userId } } }],
-    //   },
-    //   include: {
-    //     splits: {
-    //       include: { user: { select: { id: true, name: true } } },
-    //     },
-    //     paidBy: { select: { id: true, name: true } },
-    //   },
-    // });
-
-    // const balances = this.calculateBalances(transactions);
-
-    // if (balances.memberId && balances[userId].balance.toNumber() !== 0) {
-    //   throw new ForbiddenException(
-    //     'You cannot leave this group until all balances are settled.',
-    //   );
-    // }
+    if (await this.groupDebtService.hasOpenDebts(groupId, userId)) {
+      throw new ForbiddenException(
+        'You cannot leave this group until all balances are settled.',
+      );
+    }
 
     const member = await this.prisma.groupMember.delete({
       where: { groupId_userId: { groupId, userId } },

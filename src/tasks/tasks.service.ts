@@ -1,4 +1,9 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
@@ -24,7 +29,16 @@ export class TasksService {
     const first = await this.prisma.task.findFirst({
       where: { groupId },
       orderBy: { position: 'asc' },
-      include: { group: { include: { members: true } } },
+    });
+
+    const task = await this.prisma.task.create({
+      data: {
+        text,
+        groupId,
+        createdById: userId,
+        position: (first?.position ?? 0) - 1,
+      },
+      include: { createdBy: { select: { id: true, name: true } } },
     });
 
     const group = await this.prisma.group.findFirstOrThrow({
@@ -42,15 +56,7 @@ export class TasksService {
       `New item added in ${group.name}`,
     );
 
-    return this.prisma.task.create({
-      data: {
-        text,
-        groupId,
-        createdById: userId,
-        position: (first?.position ?? 0) - 1,
-      },
-      include: { createdBy: { select: { id: true, name: true } } },
-    });
+    return task;
   }
 
   async update(
@@ -60,6 +66,11 @@ export class TasksService {
     data: { text?: string; done?: boolean },
   ) {
     await this.assertBelongsToGroup(taskId, groupId);
+
+    const task = await this.prisma.task.update({
+      where: { id: taskId, groupId },
+      data,
+    });
 
     const group = await this.prisma.group.findFirstOrThrow({
       where: { id: groupId },
@@ -76,10 +87,16 @@ export class TasksService {
       `Item marked as ${data.done ? '"Done"' : '"Undone"'} in ${group.name}`,
     );
 
-    return this.prisma.task.update({ where: { id: taskId }, data });
+    return task;
   }
 
   async remove(userId: string, groupId: string, taskId: string) {
+    await this.assertBelongsToGroup(taskId, groupId);
+
+    const task = await this.prisma.task.delete({
+      where: { id: taskId, groupId },
+    });
+
     const group = await this.prisma.group.findFirstOrThrow({
       where: { id: groupId },
       include: { members: true },
@@ -95,18 +112,30 @@ export class TasksService {
       `Item removed from ${group.name}`,
     );
 
-    return this.prisma.task.delete({ where: { id: taskId } });
+    return task;
   }
 
   async reorder(userId: string, groupId: string, orderedIds: string[]) {
-    await this.prisma.$transaction(
-      orderedIds.map((id, index) =>
-        this.prisma.task.update({
-          where: { id },
-          data: { position: index },
-        }),
-      ),
-    );
+    try {
+      // All or nothing: one id from outside this group cancels the whole reorder
+      await this.prisma.$transaction(
+        orderedIds.map((id, index) =>
+          this.prisma.task.update({
+            where: { id, groupId },
+            data: { position: index },
+          }),
+        ),
+      );
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new NotFoundException('Task not found in this group');
+        }
+      }
+
+      throw error;
+    }
+
     const group = await this.prisma.group.findFirstOrThrow({
       where: { id: groupId },
       include: { members: true },

@@ -13,6 +13,8 @@ import { BugStatus, Severity } from '@prisma/client';
 import { AdminService } from 'src/admin/admin.service';
 import { AdminOnlyGuard } from 'src/admin/role.guard';
 
+import { AdminUpdateUserDto } from 'src/schema/user';
+
 @Controller('admin')
 @UseGuards(AdminOnlyGuard)
 export class AdminController {
@@ -36,7 +38,7 @@ export class AdminController {
   @Patch('users/:id')
   updateUser(
     @Param() { id }: { id: string },
-    @Body() { password }: { password: string },
+    @Body() { password }: AdminUpdateUserDto,
   ) {
     return this.adminService.updateUser(id, password);
   }
