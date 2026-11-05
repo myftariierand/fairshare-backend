@@ -10,6 +10,10 @@ export class DatabaseService extends PrismaClient implements OnModuleInit {
         user: {
           password: true,
         },
+        // Anyone holding it can join the group, so only getInviteLink selects it
+        group: {
+          inviteToken: true,
+        },
       },
     });
   }

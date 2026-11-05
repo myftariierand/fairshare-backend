@@ -24,6 +24,8 @@ import {
   AcceptGroupInviteParamsDto,
   RejectGroupInviteParamsDto,
   GroupMemberRemoveParamsDto,
+  InviteLinkParamsDto,
+  JoinGroupParamsDto,
 } from 'src/schema/group';
 
 import { UserId } from 'src/users/user.decorator';
@@ -47,9 +49,19 @@ export class GroupsController {
     return this.groupsService.findGroupById(userId, id);
   }
 
-  @Post(':id/join')
-  async joinGroup(@UserId() userId, @Param() { id }) {
-    return this.groupsService.joinGroup(userId, id);
+  @Get(':groupId/invite-link')
+  getInviteLink(@UserId() userId, @Param() { groupId }: InviteLinkParamsDto) {
+    return this.groupsService.getInviteLink(userId, groupId);
+  }
+
+  @Post(':groupId/invite-link/reset')
+  resetInviteLink(@UserId() userId, @Param() { groupId }: InviteLinkParamsDto) {
+    return this.groupsService.resetInviteLink(userId, groupId);
+  }
+
+  @Post('join/:token')
+  async joinGroup(@UserId() userId, @Param() { token }: JoinGroupParamsDto) {
+    return this.groupsService.joinGroup(userId, token);
   }
 
   @Post()
@@ -101,8 +113,11 @@ export class GroupsController {
   }
 
   @Post('invite/:inviteId/reject')
-  rejectInvite(@Param() { inviteId }: RejectGroupInviteParamsDto) {
-    return this.groupsService.rejectInvitation(inviteId);
+  rejectInvite(
+    @UserId() userId,
+    @Param() { inviteId }: RejectGroupInviteParamsDto,
+  ) {
+    return this.groupsService.rejectInvitation(userId, inviteId);
   }
 
   @Delete(':groupId/remove/:memberId')

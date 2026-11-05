@@ -69,6 +69,18 @@ export class RejectGroupInviteParamsDto extends createZodDto(
   RejectGroupParamsSchema,
 ) {}
 
+const JoinGroupParamsSchema = z.object({
+  token: z.string().uuid(),
+});
+
+export class JoinGroupParamsDto extends createZodDto(JoinGroupParamsSchema) {}
+
+const InviteLinkParamsSchema = z.object({
+  groupId: z.string().uuid(),
+});
+
+export class InviteLinkParamsDto extends createZodDto(InviteLinkParamsSchema) {}
+
 const GroupMemberRemoveSchmea = z.object({
   groupId: z.string().uuid(),
   memberId: z.string().uuid(),
