@@ -51,8 +51,11 @@ export class AuthController {
 
   @Public()
   @Get('refresh')
-  refresh(@Cookies('jwt') refreshToken: string) {
-    return this.authService.refresh(refreshToken);
+  refresh(
+    @Cookies('jwt') refreshToken: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.authService.refreshWithCookie(refreshToken, response);
   }
 
   @Public()
@@ -75,10 +78,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('logout')
   logout(
-    @Cookies('jwt') refreshToken: string,
+    @Cookies('jwt') cookieToken: string,
+    @Body('refreshToken') bodyToken: string,
     @Res({ passthrough: true }) response: Response,
   ) {
-    return this.authService.logout(refreshToken, response);
+    return this.authService.logout(cookieToken ?? bodyToken, response);
   }
 
   @Get('profile')
@@ -89,13 +93,16 @@ export class AuthController {
   @Post('change-password')
   async changePassword(
     @Req() req,
-    @Body() { password, newPassword, confirmPassword }: ChangePasswordDto,
+    @Cookies('jwt') cookieToken: string,
+    @Body()
+    { password, newPassword, confirmPassword, refreshToken }: ChangePasswordDto,
   ): Promise<User> {
     return this.authService.changePassword(
       req.id,
       password,
       newPassword,
       confirmPassword,
+      cookieToken ?? refreshToken,
     );
   }
 

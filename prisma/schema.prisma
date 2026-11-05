@@ -31,6 +31,7 @@ model User {
   role                 Role                  @default(USER)
   tasks                Task[]
   deviceTokens         DeviceToken[]
+  refreshTokens        RefreshToken[]
 }
 
 model Group {
@@ -268,6 +269,21 @@ enum TransactionCategory {
 enum Role {
   USER
   ADMIN
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  sessionId String
+  tokenHash String    @unique
+  admin     Boolean   @default(false)
+  usedAt    DateTime?
+  expiresAt DateTime
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@index([sessionId])
+  @@index([userId])
 }
 
 model DeviceToken {

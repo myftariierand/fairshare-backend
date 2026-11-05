@@ -42,6 +42,8 @@ const ChangePasswordSchema = z.object({
   password: z.string().optional(),
   newPassword: PasswordSchema,
   confirmPassword: z.string(),
+  // Sent by the mobile app, which has no cookie, to stay logged in after the change
+  refreshToken: z.string().optional(),
 });
 
 export class ChangePasswordDto extends createZodDto(ChangePasswordSchema) {}

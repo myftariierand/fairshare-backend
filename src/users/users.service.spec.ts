@@ -14,6 +14,8 @@ const existing = (overrides = {}) => ({
 describe('UsersService.findOrCreateGoogleUser', () => {
   const prisma = {
     user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+    refreshToken: { deleteMany: jest.fn() },
+    $transaction: jest.fn(),
   };
   const email = { sendEmail: jest.fn().mockResolvedValue({}) };
 
@@ -22,6 +24,9 @@ describe('UsersService.findOrCreateGoogleUser', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     email.sendEmail.mockResolvedValue({});
+    prisma.$transaction.mockImplementation((operations) =>
+      Promise.all(operations),
+    );
     prisma.user.create.mockImplementation(async ({ data }) => ({
       id: 'new',
       createdAt: new Date(),
@@ -60,6 +65,16 @@ describe('UsersService.findOrCreateGoogleUser', () => {
       data: { password: null, provider: 'google', emailVerified: true },
     });
     expect(user.password).toBeNull();
+  });
+
+  it('ends the sessions of the previous holder', async () => {
+    prisma.user.findUnique.mockResolvedValue(existing());
+
+    await service.findOrCreateGoogleUser('owner@gmail.com', 'Owner');
+
+    expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+    });
   });
 
   it('leaves a verified account and its password alone', async () => {

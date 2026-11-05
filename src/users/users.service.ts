@@ -116,10 +116,15 @@ export class UsersService {
 
     if (user.emailVerified) return user;
 
-    return this.prisma.user.update({
-      where: { id: user.id },
-      data: { password: null, provider: 'google', emailVerified: true },
-    });
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { password: null, provider: 'google', emailVerified: true },
+      }),
+      this.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+    ]);
+
+    return updated;
   }
 
   async findFriendRequests(userId: string) {

@@ -23,14 +23,16 @@ import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 import { renderTemplate } from 'templates/render-template';
 import { OtpService } from 'src/otp/otp.service';
+import {
+  REFRESH_TOKEN_EXPIRY_MS,
+  RefreshTokenService,
+} from 'src/auth/refresh-token.service';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private googleClient = new OAuth2Client();
 
-  private readonly REFRESH_TOKEN_EXPIRY_MS = 365 * 24 * 60 * 60 * 1000;
-  private readonly REFRESH_TOKEN_EXPIRY = '365d';
   private readonly ACCESS_TOKEN_EXPIRY = '15m';
 
   constructor(
@@ -40,7 +42,34 @@ export class AuthService {
     private emailService: EmailService,
     private activityLogsService: ActivityLogsService,
     private otpService: OtpService,
+    private refreshTokens: RefreshTokenService,
   ) {}
+
+  private signAccessToken(userId: string, admin: boolean) {
+    return this.jwtService.signAsync(
+      admin ? { id: userId, role: Role.ADMIN } : { id: userId },
+      {
+        secret: process.env.ACCESS_TOKEN_SECRET,
+        expiresIn: this.ACCESS_TOKEN_EXPIRY,
+      },
+    );
+  }
+
+  private async issueTokens(userId: string, admin = false) {
+    return {
+      accessToken: await this.signAccessToken(userId, admin),
+      refreshToken: await this.refreshTokens.createSession(userId, admin),
+    };
+  }
+
+  private setRefreshCookie(response: Response, refreshToken: string) {
+    response.cookie('jwt', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      maxAge: REFRESH_TOKEN_EXPIRY_MS,
+      sameSite: 'none',
+    });
+  }
 
   async login(
     loginDto: LoginDto,
@@ -71,50 +100,41 @@ export class AuthService {
         'Invalid email or password. Please check your credentials.',
       );
 
-    const payload = { id: user.id };
-    const accessToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.ACCESS_TOKEN_SECRET,
-      expiresIn: this.ACCESS_TOKEN_EXPIRY,
-    });
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.REFRESH_TOKEN_SECRET,
-      expiresIn: this.REFRESH_TOKEN_EXPIRY,
-    });
+    const { accessToken, refreshToken } = await this.issueTokens(user.id);
 
     if (request.headers['x-client'] === 'mobile')
       return { accessToken, refreshToken, user: rest };
 
-    response.cookie('jwt', refreshToken, {
-      httpOnly: true,
-      secure: true,
-      maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
-      sameSite: 'none',
-    });
+    this.setRefreshCookie(response, refreshToken);
 
     return { accessToken };
   }
 
-  async refresh(refreshToken: string) {
-    try {
-      const res = await this.jwtService.verifyAsync(refreshToken, {
-        secret: process.env.REFRESH_TOKEN_SECRET,
-      });
+  async refresh(refreshToken: unknown) {
+    const rotated = await this.refreshTokens.rotate(refreshToken);
 
-      const payload = { id: res.id, role: res.role };
-      const accessToken = await this.jwtService.signAsync(payload, {
-        secret: process.env.ACCESS_TOKEN_SECRET,
-        expiresIn: this.ACCESS_TOKEN_EXPIRY,
-      });
-      return { accessToken };
-    } catch (error: any) {
+    if (!rotated) {
       throw new HttpException(
         {
           status: HttpStatus.FORBIDDEN,
-          message: `Forbidden: ${error.message}`,
+          message: 'Forbidden: invalid refresh token',
         },
         HttpStatus.FORBIDDEN,
       );
     }
+
+    return {
+      accessToken: await this.signAccessToken(rotated.userId, rotated.admin),
+      refreshToken: rotated.token,
+    };
+  }
+
+  async refreshWithCookie(token: unknown, response: Response) {
+    const { accessToken, refreshToken } = await this.refresh(token);
+
+    this.setRefreshCookie(response, refreshToken);
+
+    return { accessToken };
   }
 
   async register(
@@ -139,25 +159,12 @@ export class AuthService {
         );
       }
 
-      const payload = { id: user.id };
-      const accessToken = await this.jwtService.signAsync(payload, {
-        secret: process.env.ACCESS_TOKEN_SECRET,
-        expiresIn: this.ACCESS_TOKEN_EXPIRY,
-      });
-      const refreshToken = await this.jwtService.signAsync(payload, {
-        secret: process.env.REFRESH_TOKEN_SECRET,
-        expiresIn: this.REFRESH_TOKEN_EXPIRY,
-      });
+      const { accessToken, refreshToken } = await this.issueTokens(user.id);
 
       if (request.headers['x-client'] === 'mobile')
         return { accessToken, refreshToken, user };
 
-      response.cookie('jwt', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
-      });
+      this.setRefreshCookie(response, refreshToken);
 
       return { accessToken };
     } catch (error) {
@@ -186,6 +193,8 @@ export class AuthService {
         { status: HttpStatus.NO_CONTENT },
         HttpStatus.NO_CONTENT,
       );
+
+    await this.refreshTokens.revokeSession(refreshToken);
 
     response.clearCookie('jwt', {
       httpOnly: true,
@@ -290,6 +299,7 @@ export class AuthService {
     password: string | undefined,
     newPassword: string,
     confirmPassword: string,
+    currentRefreshToken?: string,
   ) {
     if (newPassword !== confirmPassword) {
       throw new HttpException(
@@ -339,6 +349,8 @@ export class AuthService {
       data: { password: hashedPwd },
     });
 
+    await this.refreshTokens.revokeAll(userId, currentRefreshToken);
+
     await this.activityLogsService.createActivityLog({
       action: 'USER_CHANGED_PASSWORD',
       user: { connect: { id: userId } },
@@ -363,18 +375,9 @@ export class AuthService {
       return res.status(401).json({ message: 'Google authentication failed.' });
     }
 
-    const payload = { id: user.id };
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.REFRESH_TOKEN_SECRET,
-      expiresIn: this.REFRESH_TOKEN_EXPIRY,
-    });
+    const refreshToken = await this.refreshTokens.createSession(user.id);
 
-    res.cookie('jwt', refreshToken, {
-      httpOnly: true,
-      secure: true,
-      maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
-      sameSite: 'none',
-    });
+    this.setRefreshCookie(res, refreshToken);
 
     return res.redirect(process.env.CLIENT_ORIGIN || '/');
   }
@@ -442,6 +445,8 @@ export class AuthService {
         data: { password: hashedPwd },
       });
 
+      await this.refreshTokens.revokeAll(decoded.id);
+
       return { message: 'Password reset successfully' };
     } catch (error: any) {
       throw new ForbiddenException('Invalid or expired token');
@@ -484,23 +489,9 @@ export class AuthService {
       throw invalidCreds();
     }
 
-    const payload = { id: user.id, role: user.role };
+    const { accessToken, refreshToken } = await this.issueTokens(user.id, true);
 
-    const accessToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.ACCESS_TOKEN_SECRET,
-      expiresIn: this.ACCESS_TOKEN_EXPIRY,
-    });
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.REFRESH_TOKEN_SECRET,
-      expiresIn: this.REFRESH_TOKEN_EXPIRY,
-    });
-
-    response.cookie('jwt', refreshToken, {
-      httpOnly: true,
-      secure: true,
-      maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
-      sameSite: 'none',
-    });
+    this.setRefreshCookie(response, refreshToken);
 
     return {
       accessToken,
@@ -535,21 +526,6 @@ export class AuthService {
       payload.name ?? payload.given_name ?? payload.email.split('@')[0],
     );
 
-    const accessToken = await this.jwtService.signAsync(
-      { id: user.id },
-      {
-        secret: process.env.ACCESS_TOKEN_SECRET,
-        expiresIn: this.ACCESS_TOKEN_EXPIRY,
-      },
-    );
-    const refreshToken = await this.jwtService.signAsync(
-      { id: user.id },
-      {
-        secret: process.env.REFRESH_TOKEN_SECRET,
-        expiresIn: this.REFRESH_TOKEN_EXPIRY,
-      },
-    );
-
-    return { accessToken, refreshToken };
+    return this.issueTokens(user.id);
   }
 }
