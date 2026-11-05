@@ -18,6 +18,7 @@ import { Cookies, Public } from 'src/auth/auth.decorators';
 
 import {
   ChangePasswordDto,
+  GoogleMobileLoginDto,
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
@@ -161,7 +162,7 @@ export class AuthController {
   @Public()
   @ThrottleByClient(20)
   @Post('google/mobile')
-  async googleMobile(@Body() dto: { idToken: string }) {
+  async googleMobile(@Body() dto: GoogleMobileLoginDto) {
     return this.authService.loginWithGoogleIdToken(dto.idToken);
   }
 

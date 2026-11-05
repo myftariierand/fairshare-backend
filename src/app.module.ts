@@ -21,10 +21,11 @@ import { DevicesModule } from 'src/devices/devices.modules';
 
 import { AuthGuard } from 'src/auth/auth.guard';
 import { throttlerOptions } from 'src/throttling';
+import { validateEnv } from 'src/env.validation';
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({ validate: validateEnv }),
     ThrottlerModule.forRoot(throttlerOptions),
     CloudinaryModule,
     EmailModule,

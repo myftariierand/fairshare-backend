@@ -56,6 +56,12 @@ const ResetPasswordSchema = z.object({
 
 export class ResetPasswordDto extends createZodDto(ResetPasswordSchema) {}
 
+const GoogleMobileLoginSchema = z.object({ idToken: z.string().min(1) });
+
+export class GoogleMobileLoginDto extends createZodDto(
+  GoogleMobileLoginSchema,
+) {}
+
 export const RequestOtpDto = z.object({
   email: z.string().email(),
 });

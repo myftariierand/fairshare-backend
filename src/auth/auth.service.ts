@@ -511,10 +511,20 @@ export class AuthService {
   }
 
   async loginWithGoogleIdToken(idToken: string) {
-    const ticket = await this.googleClient.verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_WEB_CLIENT_ID!,
-    });
+    // Without an audience the library accepts a token issued to any app using Google sign-in.
+    // GOOGLE_CLIENT_ID is required at startup, so this list is never empty.
+    const audience = [
+      process.env.GOOGLE_CLIENT_ID!,
+      process.env.GOOGLE_WEB_CLIENT_ID,
+    ].filter((id): id is string => !!id);
+
+    const ticket = await this.googleClient
+      .verifyIdToken({ idToken, audience })
+      .catch((error) => {
+        this.logger.warn(`Rejected Google ID token: ${error.message}`);
+
+        throw new UnauthorizedException('Google sign-in failed');
+      });
 
     const payload = ticket.getPayload();
     if (!payload?.email || !payload.email_verified) {
