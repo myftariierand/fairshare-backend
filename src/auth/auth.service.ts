@@ -12,6 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Prisma, Role, User } from '@prisma/client';
 import { Request, Response } from 'express';
 import * as bcrypt from 'bcrypt';
+import { createHash } from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 
 import { LoginDto, RegisterDto } from 'src/auth/schema';
@@ -23,14 +24,16 @@ import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
 import { renderTemplate } from 'templates/render-template';
 import { OtpService } from 'src/otp/otp.service';
+import {
+  REFRESH_TOKEN_EXPIRY_MS,
+  RefreshTokenService,
+} from 'src/auth/refresh-token.service';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private googleClient = new OAuth2Client();
 
-  private readonly REFRESH_TOKEN_EXPIRY_MS = 365 * 24 * 60 * 60 * 1000;
-  private readonly REFRESH_TOKEN_EXPIRY = '365d';
   private readonly ACCESS_TOKEN_EXPIRY = '15m';
 
   constructor(
@@ -40,7 +43,34 @@ export class AuthService {
     private emailService: EmailService,
     private activityLogsService: ActivityLogsService,
     private otpService: OtpService,
+    private refreshTokens: RefreshTokenService,
   ) {}
+
+  private signAccessToken(userId: string, admin: boolean) {
+    return this.jwtService.signAsync(
+      admin ? { id: userId, role: Role.ADMIN } : { id: userId },
+      {
+        secret: process.env.ACCESS_TOKEN_SECRET,
+        expiresIn: this.ACCESS_TOKEN_EXPIRY,
+      },
+    );
+  }
+
+  private async issueTokens(userId: string, admin = false) {
+    return {
+      accessToken: await this.signAccessToken(userId, admin),
+      refreshToken: await this.refreshTokens.createSession(userId, admin),
+    };
+  }
+
+  private setRefreshCookie(response: Response, refreshToken: string) {
+    response.cookie('jwt', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      maxAge: REFRESH_TOKEN_EXPIRY_MS,
+      sameSite: 'none',
+    });
+  }
 
   async login(
     loginDto: LoginDto,
@@ -71,50 +101,41 @@ export class AuthService {
         'Invalid email or password. Please check your credentials.',
       );
 
-    const payload = { id: user.id };
-    const accessToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.ACCESS_TOKEN_SECRET,
-      expiresIn: this.ACCESS_TOKEN_EXPIRY,
-    });
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.REFRESH_TOKEN_SECRET,
-      expiresIn: this.REFRESH_TOKEN_EXPIRY,
-    });
+    const { accessToken, refreshToken } = await this.issueTokens(user.id);
 
     if (request.headers['x-client'] === 'mobile')
       return { accessToken, refreshToken, user: rest };
 
-    response.cookie('jwt', refreshToken, {
-      httpOnly: true,
-      secure: true,
-      maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
-      sameSite: 'none',
-    });
+    this.setRefreshCookie(response, refreshToken);
 
     return { accessToken };
   }
 
-  async refresh(refreshToken: string) {
-    try {
-      const res = await this.jwtService.verifyAsync(refreshToken, {
-        secret: process.env.REFRESH_TOKEN_SECRET,
-      });
+  async refresh(refreshToken: unknown) {
+    const rotated = await this.refreshTokens.rotate(refreshToken);
 
-      const payload = { id: res.id, role: res.role };
-      const accessToken = await this.jwtService.signAsync(payload, {
-        secret: process.env.ACCESS_TOKEN_SECRET,
-        expiresIn: this.ACCESS_TOKEN_EXPIRY,
-      });
-      return { accessToken };
-    } catch (error: any) {
+    if (!rotated) {
       throw new HttpException(
         {
           status: HttpStatus.FORBIDDEN,
-          message: `Forbidden: ${error.message}`,
+          message: 'Forbidden: invalid refresh token',
         },
         HttpStatus.FORBIDDEN,
       );
     }
+
+    return {
+      accessToken: await this.signAccessToken(rotated.userId, rotated.admin),
+      refreshToken: rotated.token,
+    };
+  }
+
+  async refreshWithCookie(token: unknown, response: Response) {
+    const { accessToken, refreshToken } = await this.refresh(token);
+
+    this.setRefreshCookie(response, refreshToken);
+
+    return { accessToken };
   }
 
   async register(
@@ -123,11 +144,12 @@ export class AuthService {
     request: Request<{ headers: { 'x-client': string } }>,
   ) {
     try {
-      const user = await this.usersService.create({ email, name, password });
-
-      await this.activityLogsService.createActivityLog({
-        action: 'USER_REGISTERED',
-        user: { connect: { id: user.id } },
+      const user = await this.usersService.create({
+        email,
+        name,
+        password,
+        // Written in the same statement, so the two are saved or lost together
+        activityLog: { create: { action: 'USER_REGISTERED' } },
       });
 
       try {
@@ -139,25 +161,12 @@ export class AuthService {
         );
       }
 
-      const payload = { id: user.id };
-      const accessToken = await this.jwtService.signAsync(payload, {
-        secret: process.env.ACCESS_TOKEN_SECRET,
-        expiresIn: this.ACCESS_TOKEN_EXPIRY,
-      });
-      const refreshToken = await this.jwtService.signAsync(payload, {
-        secret: process.env.REFRESH_TOKEN_SECRET,
-        expiresIn: this.REFRESH_TOKEN_EXPIRY,
-      });
+      const { accessToken, refreshToken } = await this.issueTokens(user.id);
 
       if (request.headers['x-client'] === 'mobile')
         return { accessToken, refreshToken, user };
 
-      response.cookie('jwt', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
-      });
+      this.setRefreshCookie(response, refreshToken);
 
       return { accessToken };
     } catch (error) {
@@ -186,6 +195,8 @@ export class AuthService {
         { status: HttpStatus.NO_CONTENT },
         HttpStatus.NO_CONTENT,
       );
+
+    await this.refreshTokens.revokeSession(refreshToken);
 
     response.clearCookie('jwt', {
       httpOnly: true,
@@ -290,6 +301,7 @@ export class AuthService {
     password: string | undefined,
     newPassword: string,
     confirmPassword: string,
+    currentRefreshToken?: string,
   ) {
     if (newPassword !== confirmPassword) {
       throw new HttpException(
@@ -334,28 +346,40 @@ export class AuthService {
 
     const hashedPwd = await bcrypt.hash(newPassword, 10);
 
-    const res = await this.prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPwd },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const res = await tx.user.update({
+        where: { id: userId },
+        data: { password: hashedPwd },
+      });
 
-    await this.activityLogsService.createActivityLog({
-      action: 'USER_CHANGED_PASSWORD',
-      user: { connect: { id: userId } },
-    });
+      await this.refreshTokens.revokeAll(userId, currentRefreshToken, tx);
 
-    return res;
+      await this.activityLogsService.createActivityLog(
+        {
+          action: 'USER_CHANGED_PASSWORD',
+          user: { connect: { id: userId } },
+        },
+        tx,
+      );
+
+      return res;
+    });
   }
 
   async updateProfile(id: string, data: Prisma.UserUpdateInput): Promise<User> {
-    const user = await this.prisma.user.update({ where: { id }, data });
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({ where: { id }, data });
 
-    await this.activityLogsService.createActivityLog({
-      action: 'USER_UPDATED_PROFILE',
-      user: { connect: { id } },
+      await this.activityLogsService.createActivityLog(
+        {
+          action: 'USER_UPDATED_PROFILE',
+          user: { connect: { id } },
+        },
+        tx,
+      );
+
+      return user;
     });
-
-    return user;
   }
 
   async googleLogin(user: User, res: Response) {
@@ -363,30 +387,48 @@ export class AuthService {
       return res.status(401).json({ message: 'Google authentication failed.' });
     }
 
-    const payload = { id: user.id };
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.REFRESH_TOKEN_SECRET,
-      expiresIn: this.REFRESH_TOKEN_EXPIRY,
-    });
+    const refreshToken = await this.refreshTokens.createSession(user.id);
 
-    res.cookie('jwt', refreshToken, {
-      httpOnly: true,
-      secure: true,
-      maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
-      sameSite: 'none',
-    });
+    this.setRefreshCookie(res, refreshToken);
 
     return res.redirect(process.env.CLIENT_ORIGIN || '/');
   }
 
-  async forgotPassword(email: string) {
-    const user = await this.usersService.findUnique({
-      email: email.trim().toLowerCase(),
+  // Goes inside reset tokens. It stops matching as soon as the password changes, which makes every
+  // reset link single use and cancels older links, with nothing extra to store. It's keyed because
+  // anyone holding the link can read the token.
+  private passwordFingerprint(password: string | null) {
+    return createHash('sha256')
+      .update(`${process.env.RESET_PASSWORD_SECRET}:${password ?? ''}`)
+      .digest('base64url');
+  }
+
+  private async verifyResetTokenForUser(token: string) {
+    const decoded = await this.jwtService.verifyAsync(token, {
+      secret: process.env.RESET_PASSWORD_SECRET,
     });
+
+    const user = await this.usersService.findUnique(
+      { id: decoded.id },
+      { omit: { password: false } },
+    );
+
+    if (!user || decoded.pwd !== this.passwordFingerprint(user.password)) {
+      throw new ForbiddenException('Invalid or expired token');
+    }
+
+    return user;
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.usersService.findUnique(
+      { email: email.trim().toLowerCase() },
+      { omit: { password: false } },
+    );
 
     if (user) {
       const resetToken = await this.jwtService.signAsync(
-        { id: user.id },
+        { id: user.id, pwd: this.passwordFingerprint(user.password) },
         {
           secret: process.env.RESET_PASSWORD_SECRET,
           expiresIn: '1h',
@@ -425,21 +467,17 @@ export class AuthService {
     }
 
     try {
-      const decoded = await this.jwtService.verifyAsync(token, {
-        secret: process.env.RESET_PASSWORD_SECRET,
-      });
-
-      const user = await this.usersService.findUnique({ id: decoded.id });
-
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
+      const user = await this.verifyResetTokenForUser(token);
 
       const hashedPwd = await bcrypt.hash(newPassword, 10);
 
-      await this.prisma.user.update({
-        where: { id: decoded.id },
-        data: { password: hashedPwd },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { password: hashedPwd },
+        });
+
+        await this.refreshTokens.revokeAll(user.id, undefined, tx);
       });
 
       return { message: 'Password reset successfully' };
@@ -450,9 +488,7 @@ export class AuthService {
 
   async verifyResetToken(token: string) {
     try {
-      await this.jwtService.verifyAsync(token, {
-        secret: process.env.RESET_PASSWORD_SECRET,
-      });
+      await this.verifyResetTokenForUser(token);
 
       return { valid: true };
     } catch (error: any) {
@@ -484,23 +520,9 @@ export class AuthService {
       throw invalidCreds();
     }
 
-    const payload = { id: user.id, role: user.role };
+    const { accessToken, refreshToken } = await this.issueTokens(user.id, true);
 
-    const accessToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.ACCESS_TOKEN_SECRET,
-      expiresIn: this.ACCESS_TOKEN_EXPIRY,
-    });
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.REFRESH_TOKEN_SECRET,
-      expiresIn: this.REFRESH_TOKEN_EXPIRY,
-    });
-
-    response.cookie('jwt', refreshToken, {
-      httpOnly: true,
-      secure: true,
-      maxAge: this.REFRESH_TOKEN_EXPIRY_MS,
-      sameSite: 'none',
-    });
+    this.setRefreshCookie(response, refreshToken);
 
     return {
       accessToken,
@@ -520,42 +542,31 @@ export class AuthService {
   }
 
   async loginWithGoogleIdToken(idToken: string) {
-    const ticket = await this.googleClient.verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_WEB_CLIENT_ID!,
-    });
+    // Without an audience the library accepts a token issued to any app using Google sign-in.
+    // GOOGLE_CLIENT_ID is required at startup, so this list is never empty.
+    const audience = [
+      process.env.GOOGLE_CLIENT_ID!,
+      process.env.GOOGLE_WEB_CLIENT_ID,
+    ].filter((id): id is string => !!id);
+
+    const ticket = await this.googleClient
+      .verifyIdToken({ idToken, audience })
+      .catch((error) => {
+        this.logger.warn(`Rejected Google ID token: ${error.message}`);
+
+        throw new UnauthorizedException('Google sign-in failed');
+      });
 
     const payload = ticket.getPayload();
     if (!payload?.email || !payload.email_verified) {
       throw new UnauthorizedException('Google account not verified');
     }
 
-    let user = await this.usersService.findUnique({ email: payload.email });
-
-    if (!user) {
-      user = await this.usersService.create({
-        name: payload.name ?? payload.given_name ?? payload.email.split('@')[0],
-        email: payload.email,
-        provider: 'google',
-        emailVerified: true,
-      });
-    }
-
-    const accessToken = await this.jwtService.signAsync(
-      { id: user.id },
-      {
-        secret: process.env.ACCESS_TOKEN_SECRET,
-        expiresIn: this.ACCESS_TOKEN_EXPIRY,
-      },
-    );
-    const refreshToken = await this.jwtService.signAsync(
-      { id: user.id },
-      {
-        secret: process.env.REFRESH_TOKEN_SECRET,
-        expiresIn: this.REFRESH_TOKEN_EXPIRY,
-      },
+    const user = await this.usersService.findOrCreateGoogleUser(
+      payload.email,
+      payload.name ?? payload.given_name ?? payload.email.split('@')[0],
     );
 
-    return { accessToken, refreshToken };
+    return this.issueTokens(user.id);
   }
 }

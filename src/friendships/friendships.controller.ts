@@ -4,6 +4,8 @@ import { FriendshipsService } from 'src/friendships/friendships.service';
 
 import { UserId } from 'src/users/user.decorator';
 
+import { ThrottleByClient } from 'src/throttling';
+
 import {
   SendFriendRequestParamsDto,
   AcceptFriendRequestParamsDto,
@@ -25,6 +27,7 @@ export class FriendshipsController {
     return this.friendshipsService.findRequests(userId);
   }
 
+  @ThrottleByClient(20)
   @Post('requests/:receiverId')
   sendFriendRequest(
     @UserId() userId,

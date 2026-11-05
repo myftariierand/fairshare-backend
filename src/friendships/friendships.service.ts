@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 
-import { Friendships } from '@prisma/client';
+import { Friendships, Prisma } from '@prisma/client';
 
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
@@ -97,20 +97,27 @@ export class FriendshipsService {
 
   async sendRequest(userId: string, receiverId: string) {
     try {
-      const response = await this.prisma.friendships.create({
-        data: {
-          senderId: userId,
-          receiverId: receiverId,
-        },
-        include: {
-          sender: true,
-        },
-      });
+      const response = await this.prisma.$transaction(async (tx) => {
+        const response = await tx.friendships.create({
+          data: {
+            senderId: userId,
+            receiverId: receiverId,
+          },
+          include: {
+            sender: true,
+          },
+        });
 
-      await this.activityLogsService.createActivityLog({
-        action: 'FRIENDSHIP_REQUEST_SENT',
-        user: { connect: { id: userId } },
-        targetUser: { connect: { id: receiverId } },
+        await this.activityLogsService.createActivityLog(
+          {
+            action: 'FRIENDSHIP_REQUEST_SENT',
+            user: { connect: { id: userId } },
+            targetUser: { connect: { id: receiverId } },
+          },
+          tx,
+        );
+
+        return response;
       });
 
       this.sse.emit(
@@ -131,30 +138,45 @@ export class FriendshipsService {
 
       return response;
     } catch (error) {
-      console.log(error);
+      // Sending a request twice still isn't an error for the client
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return;
+      }
+
+      throw error;
     }
   }
 
   async acceptRequest(userId: string, id: string) {
     try {
-      const response = await this.prisma.friendships.update({
-        where: {
-          id,
-          receiverId: userId,
-          status: 'PENDING',
-        },
-        data: {
-          status: 'ACCEPTED',
-        },
-        include: {
-          receiver: true,
-        },
-      });
+      const response = await this.prisma.$transaction(async (tx) => {
+        const response = await tx.friendships.update({
+          where: {
+            id,
+            receiverId: userId,
+            status: 'PENDING',
+          },
+          data: {
+            status: 'ACCEPTED',
+          },
+          include: {
+            receiver: true,
+          },
+        });
 
-      await this.activityLogsService.createActivityLog({
-        action: 'FRIENDSHIP_REQUEST_ACCEPTED',
-        user: { connect: { id: userId } },
-        targetUser: { connect: { id: response.senderId } },
+        await this.activityLogsService.createActivityLog(
+          {
+            action: 'FRIENDSHIP_REQUEST_ACCEPTED',
+            user: { connect: { id: userId } },
+            targetUser: { connect: { id: response.senderId } },
+          },
+          tx,
+        );
+
+        return response;
       });
 
       this.sse.emit(
@@ -180,21 +202,28 @@ export class FriendshipsService {
 
   async rejectRequest(userId: string, id: string) {
     try {
-      const response = await this.prisma.friendships.delete({
-        where: {
-          id,
-          receiverId: userId,
-          status: 'PENDING',
-        },
-        include: {
-          receiver: true,
-        },
-      });
+      const response = await this.prisma.$transaction(async (tx) => {
+        const response = await tx.friendships.delete({
+          where: {
+            id,
+            receiverId: userId,
+            status: 'PENDING',
+          },
+          include: {
+            receiver: true,
+          },
+        });
 
-      await this.activityLogsService.createActivityLog({
-        action: 'FRIENDSHIP_REQUEST_REJECTED',
-        user: { connect: { id: userId } },
-        targetUser: { connect: { id: response.senderId } },
+        await this.activityLogsService.createActivityLog(
+          {
+            action: 'FRIENDSHIP_REQUEST_REJECTED',
+            user: { connect: { id: userId } },
+            targetUser: { connect: { id: response.senderId } },
+          },
+          tx,
+        );
+
+        return response;
       });
 
       this.sse.emit(
@@ -216,41 +245,57 @@ export class FriendshipsService {
   }
 
   async cancelRequest(userId: string, id: string) {
-    const res = await this.prisma.friendships.delete({
-      where: {
-        id,
-        senderId: userId,
-        status: 'PENDING',
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const res = await tx.friendships.delete({
+        where: {
+          id,
+          senderId: userId,
+          status: 'PENDING',
+        },
+      });
 
-    await this.activityLogsService.createActivityLog({
-      action: 'FRIENDSHIP_REQUEST_CANCELLED',
-      user: { connect: { id: userId } },
-      targetUser: { connect: { id: res.receiverId } },
-    });
+      await this.activityLogsService.createActivityLog(
+        {
+          action: 'FRIENDSHIP_REQUEST_CANCELLED',
+          user: { connect: { id: userId } },
+          targetUser: { connect: { id: res.receiverId } },
+        },
+        tx,
+      );
 
-    return res;
+      return res;
+    });
   }
 
   async unfriend(userId: string, id: string) {
     try {
-      const response = await this.prisma.friendships.delete({
-        where: {
-          id,
-          status: 'ACCEPTED',
-          OR: [{ senderId: userId }, { receiverId: userId }],
+      const { response, eventReceiver } = await this.prisma.$transaction(
+        async (tx) => {
+          const response = await tx.friendships.delete({
+            where: {
+              id,
+              status: 'ACCEPTED',
+              OR: [{ senderId: userId }, { receiverId: userId }],
+            },
+          });
+
+          const eventReceiver =
+            response.senderId === userId
+              ? response.receiverId
+              : response.senderId;
+
+          await this.activityLogsService.createActivityLog(
+            {
+              action: 'FRIENDSHIP_REMOVED',
+              user: { connect: { id: userId } },
+              targetUser: { connect: { id: eventReceiver } },
+            },
+            tx,
+          );
+
+          return { response, eventReceiver };
         },
-      });
-
-      const eventReceiver =
-        response.senderId === userId ? response.receiverId : response.senderId;
-
-      await this.activityLogsService.createActivityLog({
-        action: 'FRIENDSHIP_REMOVED',
-        user: { connect: { id: userId } },
-        targetUser: { connect: { id: eventReceiver } },
-      });
+      );
 
       this.sse.emit([eventReceiver], SseEventType.FRIEND_REMOVED, '');
 

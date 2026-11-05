@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import { DatabaseService } from 'src/database/database.service';
 import { EmailService } from 'src/email/email.service';
@@ -9,6 +9,8 @@ import { renderTemplate } from 'templates/render-template';
 
 @Injectable()
 export class BugReportsService {
+  private readonly logger = new Logger(BugReportsService.name);
+
   constructor(
     private readonly prisma: DatabaseService,
     private readonly emailService: EmailService,
@@ -29,18 +31,16 @@ export class BugReportsService {
       createdAt: bug.createdAt.toISOString(),
     });
 
-    this.emailService.sendEmail({
-      to: 'myftarierand@gmail.com',
-      subject: `New Bug Report - ${bug.severity}`,
-      html,
-    });
+    this.emailService
+      .sendEmail({
+        to: 'myftarierand@gmail.com',
+        subject: `New Bug Report - ${bug.severity}`,
+        html,
+      })
+      .catch((err) => {
+        this.logger.error('Failed to send bug report email', err);
+      });
 
     return bug;
-  }
-
-  async findAll() {
-    return this.prisma.bugReport.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
   }
 }

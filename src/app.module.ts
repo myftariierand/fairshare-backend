@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 
 import { DatabaseModule } from 'src/database/database.module';
@@ -19,10 +20,13 @@ import { TasksModule } from 'src/tasks/tasks.module';
 import { DevicesModule } from 'src/devices/devices.modules';
 
 import { AuthGuard } from 'src/auth/auth.guard';
+import { throttlerOptions } from 'src/throttling';
+import { validateEnv } from 'src/env.validation';
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({ validate: validateEnv }),
+    ThrottlerModule.forRoot(throttlerOptions),
     CloudinaryModule,
     EmailModule,
     DatabaseModule,
@@ -41,6 +45,8 @@ import { AuthGuard } from 'src/auth/auth.guard';
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },
     { provide: APP_GUARD, useClass: AuthGuard },
+    // After AuthGuard, which sets the user id that logged-in requests are counted by
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor },
   ],
 })

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-google-oauth20';
 import { UsersService } from 'src/users/users.service';
@@ -20,18 +20,16 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     refreshToken: string,
     profile: any,
   ): Promise<any> {
-    const email = profile.emails[0].value;
-    let user = await this.usersService.findUnique({ email });
+    const email = profile.emails?.[0];
 
-    if (!user) {
-      user = await this.usersService.create({
-        name: profile.displayName,
-        email,
-        provider: 'google',
-        emailVerified: true,
-      });
+    // Some Google endpoints send this flag as a string
+    if (!email?.value || String(email.verified) !== 'true') {
+      throw new UnauthorizedException('Google account not verified');
     }
 
-    return user;
+    return this.usersService.findOrCreateGoogleUser(
+      email.value,
+      profile.displayName,
+    );
   }
 }

@@ -109,7 +109,12 @@ export class AdminService {
   async updateUser(id: string, newPassword: string) {
     const password = await bcrypt.hash(newPassword, 10);
 
-    return this.prisma.user.update({ where: { id }, data: { password } });
+    const [user] = await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id }, data: { password } }),
+      this.prisma.refreshToken.deleteMany({ where: { userId: id } }),
+    ]);
+
+    return user;
   }
 
   deleteUser(id: string) {

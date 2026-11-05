@@ -29,6 +29,7 @@
     "@nestjs/mapped-types": "*",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^10.0.0",
+    "@nestjs/throttler": "^6.7.1",
     "@prisma/client": "6.19.3",
     "bcrypt": "^5.1.1",
     "cloudinary": "^2.7.0",
@@ -81,6 +82,10 @@
       "ts"
     ],
     "rootDir": "src",
+    "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/$1",
+      "^templates/(.*)$": "<rootDir>/../templates/$1"
+    },
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"

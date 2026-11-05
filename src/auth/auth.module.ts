@@ -8,10 +8,11 @@ import { UsersModule } from 'src/users/users.module';
 import { GoogleStrategy } from './google.strategy';
 import { EmailModule } from 'src/email/email.module';
 import { OtpService } from 'src/otp/otp.service';
+import { RefreshTokenService } from 'src/auth/refresh-token.service';
 
 @Module({
   imports: [UsersModule, JwtModule.register({ global: true }), EmailModule],
-  providers: [AuthService, GoogleStrategy, OtpService],
+  providers: [AuthService, GoogleStrategy, OtpService, RefreshTokenService],
   controllers: [AuthController],
 })
 export class AuthModule {}
