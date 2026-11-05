@@ -17,8 +17,10 @@ import { AuthService } from 'src/auth/auth.service';
 import { Cookies, Public } from 'src/auth/auth.decorators';
 
 import {
+  ChangePasswordDto,
   LoginDto,
   RegisterDto,
+  ResetPasswordDto,
   UpdateProfileDto,
   VerifyOtpDtoClass,
   RequestOtpDtoClass,
@@ -87,12 +89,7 @@ export class AuthController {
   @Post('change-password')
   async changePassword(
     @Req() req,
-    @Body()
-    {
-      password,
-      newPassword,
-      confirmPassword,
-    }: { password: string; newPassword: string; confirmPassword: string },
+    @Body() { password, newPassword, confirmPassword }: ChangePasswordDto,
   ): Promise<User> {
     return this.authService.changePassword(
       req.id,
@@ -111,9 +108,7 @@ export class AuthController {
   @Public()
   @Post('reset-password')
   async resetPassword(
-    @Body('token') token: string,
-    @Body('password') password: string,
-    @Body('confirmPassword') confirmPassword: string,
+    @Body() { token, password, confirmPassword }: ResetPasswordDto,
   ) {
     return this.authService.resetPassword(token, password, confirmPassword);
   }

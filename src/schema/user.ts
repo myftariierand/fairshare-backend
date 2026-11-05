@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
+import { PasswordSchema } from 'src/auth/schema';
+
 const UserSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -21,3 +23,7 @@ const SearchUsersQuerySchema = z.object({
 });
 
 export class SearchUsersQueryDto extends createZodDto(SearchUsersQuerySchema) {}
+
+const AdminUpdateUserSchema = z.object({ password: PasswordSchema });
+
+export class AdminUpdateUserDto extends createZodDto(AdminUpdateUserSchema) {}

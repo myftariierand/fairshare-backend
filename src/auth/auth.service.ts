@@ -63,7 +63,8 @@ export class AuthService {
 
     const { password, ...rest } = user;
 
-    const passMatch = await bcrypt.compare(loginDto.password, password);
+    const passMatch =
+      password !== null && (await bcrypt.compare(loginDto.password, password));
 
     if (!passMatch)
       throw new UnauthorizedException(
@@ -286,7 +287,7 @@ export class AuthService {
 
   async changePassword(
     userId: string,
-    password: string,
+    password: string | undefined,
     newPassword: string,
     confirmPassword: string,
   ) {
@@ -315,10 +316,11 @@ export class AuthService {
       );
     }
 
-    const isGoogleUser = await bcrypt.compare('', user.password);
-
-    if (!isGoogleUser) {
-      const isPasswordValid = await bcrypt.compare(password, user.password);
+    // A Google account has no password until its owner sets one here
+    if (user.password !== null) {
+      const isPasswordValid =
+        password !== undefined &&
+        (await bcrypt.compare(password, user.password));
       if (!isPasswordValid) {
         throw new HttpException(
           {
@@ -471,7 +473,9 @@ export class AuthService {
 
     if (!user) throw invalidCreds();
 
-    const passMatch = await bcrypt.compare(loginDto.password, user.password);
+    const passMatch =
+      user.password !== null &&
+      (await bcrypt.compare(loginDto.password, user.password));
     if (!passMatch) throw invalidCreds();
 
     if (user.role !== Role.ADMIN) {
@@ -532,7 +536,6 @@ export class AuthService {
       user = await this.usersService.create({
         name: payload.name ?? payload.given_name ?? payload.email.split('@')[0],
         email: payload.email,
-        password: '', // Not used for OAuth users
         provider: 'google',
         emailVerified: true,
       });

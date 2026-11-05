@@ -71,7 +71,7 @@ export class UsersService {
   async create(userCreateInput: Prisma.UserCreateInput): Promise<User> {
     const { password, email, ...rest } = userCreateInput;
 
-    const hashedPwd = await bcrypt.hash(password, 10);
+    const hashedPwd = password ? await bcrypt.hash(password, 10) : null;
     const normalizedEmail = email.trim().toLowerCase();
 
     const data = { ...rest, email: normalizedEmail, password: hashedPwd };

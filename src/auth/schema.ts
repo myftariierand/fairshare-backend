@@ -1,9 +1,15 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
+// bcrypt treats a lone NUL byte the same as an empty string, so both must be rejected
+export const PasswordSchema = z
+  .string()
+  .min(1, 'This field is required!')
+  .refine((value) => !value.includes('\0'), 'Invalid password');
+
 export const LoginSchema = z.object({
   email: z.string().email(),
-  password: z.string(),
+  password: PasswordSchema,
 });
 
 export class LoginDto extends createZodDto(LoginSchema) {}
@@ -12,7 +18,7 @@ export const RegisterSchema = z
   .object({
     name: z.string(),
     email: z.string().email(),
-    password: z.string().min(1, 'This field is required!'),
+    password: PasswordSchema,
     confirmPassword: z.string().min(1, 'This field is required!'),
   })
   .superRefine((args, ctx) => {
@@ -30,6 +36,23 @@ export class RegisterDto extends createZodDto(RegisterSchema) {}
 const UpdateProfileSchema = z.object({ name: z.string() });
 
 export class UpdateProfileDto extends createZodDto(UpdateProfileSchema) {}
+
+const ChangePasswordSchema = z.object({
+  // Accounts created through Google have no current password to send
+  password: z.string().optional(),
+  newPassword: PasswordSchema,
+  confirmPassword: z.string(),
+});
+
+export class ChangePasswordDto extends createZodDto(ChangePasswordSchema) {}
+
+const ResetPasswordSchema = z.object({
+  token: z.string(),
+  password: PasswordSchema,
+  confirmPassword: z.string(),
+});
+
+export class ResetPasswordDto extends createZodDto(ResetPasswordSchema) {}
 
 export const RequestOtpDto = z.object({
   email: z.string().email(),
