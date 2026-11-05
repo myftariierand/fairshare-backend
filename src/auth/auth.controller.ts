@@ -29,6 +29,7 @@ import { User } from '@prisma/client';
 import { UserId } from 'src/users/user.decorator';
 import { OtpService } from 'src/otp/otp.service';
 import { UsersService } from 'src/users/users.service';
+import { MINUTE, ThrottleByClient, ThrottleByEmail } from 'src/throttling';
 
 @Controller('auth')
 export class AuthController {
@@ -39,6 +40,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @ThrottleByClient(10)
   @HttpCode(HttpStatus.OK)
   @Post('login')
   login(
@@ -50,6 +52,7 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleByClient(120)
   @Get('refresh')
   refresh(
     @Cookies('jwt') refreshToken: string,
@@ -59,12 +62,14 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleByClient(120)
   @Post('refresh')
   refreshMobile(@Body('refreshToken') refreshToken: string) {
     return this.authService.refresh(refreshToken);
   }
 
   @Public()
+  @ThrottleByClient(10)
   @Post('register')
   register(
     @Body() registerDto: RegisterDto,
@@ -90,6 +95,7 @@ export class AuthController {
     return this.authService.getProfile(req.id);
   }
 
+  @ThrottleByClient(10)
   @Post('change-password')
   async changePassword(
     @Req() req,
@@ -107,12 +113,15 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleByClient(5)
+  @ThrottleByEmail(3)
   @Post('forgot-password')
   async forgotPassword(@Body('email') email: string) {
     return this.authService.forgotPassword(email);
   }
 
   @Public()
+  @ThrottleByClient(10)
   @Post('reset-password')
   async resetPassword(
     @Body() { token, password, confirmPassword }: ResetPasswordDto,
@@ -121,6 +130,7 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleByClient(20)
   @Get('verify-reset-token')
   async verifyResetToken(@Query() { token }: { token: string }) {
     return this.authService.verifyResetToken(token);
@@ -149,12 +159,15 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleByClient(20)
   @Post('google/mobile')
   async googleMobile(@Body() dto: { idToken: string }) {
     return this.authService.loginWithGoogleIdToken(dto.idToken);
   }
 
   @Public()
+  @ThrottleByClient(5)
+  @ThrottleByEmail(5)
   @Post('verify-email/send')
   async sendVerificationEmail(@Body() body: RequestOtpDtoClass) {
     const user = await this.usersService.findUnique({
@@ -168,6 +181,8 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleByClient(20)
+  @ThrottleByEmail(10, 15 * MINUTE)
   @Post('verify-email/verify')
   async verifyEmailOtp(
     @Body() body: VerifyOtpDtoClass,
@@ -184,6 +199,7 @@ export class AuthController {
   }
 
   @Public()
+  @ThrottleByClient(5)
   @Post('admin/login')
   async adminLogin(
     @Body() loginDto: LoginDto,

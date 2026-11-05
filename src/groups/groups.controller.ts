@@ -30,6 +30,8 @@ import {
 
 import { UserId } from 'src/users/user.decorator';
 
+import { ThrottleByClient } from 'src/throttling';
+
 @Controller('groups')
 export class GroupsController {
   constructor(private groupsService: GroupsService) {}
@@ -64,6 +66,7 @@ export class GroupsController {
     return this.groupsService.joinGroup(userId, token);
   }
 
+  @ThrottleByClient(20)
   @Post()
   @UseInterceptors(FileInterceptor('cover'))
   createGroup(
@@ -74,6 +77,7 @@ export class GroupsController {
     return this.groupsService.create(userId, createGroupDto, cover, invite);
   }
 
+  @ThrottleByClient(20)
   @Patch(':groupId')
   @UseInterceptors(FileInterceptor('cover'))
   updateGroup(
@@ -96,6 +100,7 @@ export class GroupsController {
     return this.groupsService.delete(userId, groupId);
   }
 
+  @ThrottleByClient(30)
   @Post(':groupId/invite/:receiverId')
   sendInvite(
     @UserId() userId,
