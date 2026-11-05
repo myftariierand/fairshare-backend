@@ -16,7 +16,7 @@ import { PushService } from 'src/devices/push.service';
 import { SseEventType } from 'src/types/sse';
 
 import { toMinorUnit } from 'src/helpers/conversion-helpers';
-import { TransactionCategory } from '@prisma/client';
+import { TransactionCategory, TransactionType } from '@prisma/client';
 
 @Injectable()
 export class TransactionsService {
@@ -124,6 +124,8 @@ export class TransactionsService {
     if (!allUsersAreMembers)
       throw new ForbiddenException('All users should be members of the group');
 
+    this.assertNoDuplicateSplits(splits);
+
     const unitAmount = toMinorUnit(amount, foundGroup.currency);
     const splitsTotal = splits.reduce(
       (acc, curr) => acc + toMinorUnit(curr.amount, foundGroup.currency),
@@ -219,12 +221,24 @@ export class TransactionsService {
     // Settlements record a payment and can't be edited into something else.
     const existing = await this.prisma.transaction.findFirst({
       where: { id, groupId, type: 'EXPENSE' },
+      include: { splits: true },
     });
     if (!existing) throw new NotFoundException('Transaction not found');
 
-    // Someone who has left can stay the payer of an old expense, but can't become a new one
+    this.assertCanManage(existing, foundGroup.createdById, userId);
+
+    // Someone who has left can stay on an old expense, but can't be added to one
     if (paidBy !== existing.paidById && !groupMemebersIds.includes(paidBy))
       throw new ForbiddenException('The payer must be a member of the group');
+
+    const allowedInSplits = new Set([
+      ...groupMemebersIds,
+      ...existing.splits.map((split) => split.userId),
+    ]);
+    if (!splits.every((split) => allowedInSplits.has(split.userId)))
+      throw new ForbiddenException('All users should be members of the group');
+
+    this.assertNoDuplicateSplits(splits);
 
     const unitAmount = toMinorUnit(amount, foundGroup.currency);
     const splitsTotal = splits.reduce(
@@ -237,23 +251,22 @@ export class TransactionsService {
         'The sum of the splits must be equal to total amount',
       );
 
-    const updatedSplits = splits.map(({ userId, amount }) => ({
-      where: { userId },
-      data: { amount },
-    }));
-
-    const transaction = await this.prisma.transaction.update({
-      where: { id },
-      data: {
-        amount,
-        description,
-        category,
-        paidById: paidBy,
-        splits: {
-          updateMany: updatedSplits,
+    // Replaced rather than updated, because an edit can add people or take them off
+    const [, transaction] = await this.prisma.$transaction([
+      this.prisma.transactionSplit.deleteMany({ where: { transactionId: id } }),
+      this.prisma.transaction.update({
+        where: { id },
+        data: {
+          amount,
+          description,
+          category,
+          paidById: paidBy,
+          splits: {
+            createMany: { data: splits },
+          },
         },
-      },
-    });
+      }),
+    ]);
 
     await this.groupDebtService.updateRemainingDebts(groupId);
 
@@ -289,9 +302,20 @@ export class TransactionsService {
   }
 
   async deleteTransaction(userId: string, id: string) {
+    const existing = await this.prisma.transaction.findFirst({
+      where: { id, group: { members: { some: { userId } } } },
+      include: { group: { select: { createdById: true } } },
+    });
+    if (!existing)
+      throw new NotFoundException(
+        "Transaction not found or you don't have access",
+      );
+
+    this.assertCanManage(existing, existing.group.createdById, userId);
+
     try {
       const transaction = await this.prisma.transaction.delete({
-        where: { id, splits: { some: { userId } } },
+        where: { id },
         include: { group: true, splits: { include: { user: true } } },
       });
 
@@ -306,20 +330,27 @@ export class TransactionsService {
         group: { connect: { id: transaction.group.id } },
       });
 
-      const receivers = transaction.splits
-        .filter((split) => split.userId !== userId)
-        .map((split) => split.userId);
-      const user = transaction.splits.find((split) => split.userId === userId);
+      // Everyone with money in it, including a payer who isn't part of the split
+      const receivers = [
+        ...new Set([
+          transaction.paidById,
+          ...transaction.splits.map((split) => split.userId),
+        ]),
+      ].filter((id) => id !== userId);
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      });
 
       this.sse.emit(
         receivers,
         SseEventType.TRANSACTION_DELETED,
-        `${user?.user.name} deleted ${transaction.description}`,
+        `${user?.name} deleted ${transaction.description}`,
       );
 
       this.push.sendToUsers(receivers, {
         title: transaction.group.name,
-        body: `${user?.user.name} deleted "${transaction.description}"`,
+        body: `${user?.name} deleted "${transaction.description}"`,
         data: {
           type: SseEventType.TRANSACTION_DELETED,
           groupId: transaction.group.id,
@@ -335,6 +366,40 @@ export class TransactionsService {
           );
         }
       }
+
+      throw error;
+    }
+  }
+
+  // Someone who just owes money can't change or remove the record of it. For a settlement
+  // the payer is the debtor, so being the payer only counts on an expense.
+  private assertCanManage(
+    transaction: {
+      type: TransactionType;
+      createdById: string;
+      paidById: string;
+    },
+    groupOwnerId: string,
+    userId: string,
+  ) {
+    const canManage =
+      transaction.createdById === userId ||
+      groupOwnerId === userId ||
+      (transaction.type === TransactionType.EXPENSE &&
+        transaction.paidById === userId);
+
+    if (!canManage) {
+      throw new ForbiddenException(
+        'Only the person who added this, the person who paid or the group owner can change it.',
+      );
+    }
+  }
+
+  private assertNoDuplicateSplits(splits: { userId: string }[]) {
+    const userIds = splits.map((split) => split.userId);
+
+    if (new Set(userIds).size !== userIds.length) {
+      throw new BadRequestException('Each person can only be in a split once');
     }
   }
 
