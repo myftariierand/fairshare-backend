@@ -50,6 +50,8 @@ model Group {
   activityLog    ActivityLog[]
   remainingDebts Int               @default(0)
   tasks          Task[]
+
+  @@index([createdById])
 }
 
 model GroupMember {
@@ -61,6 +63,7 @@ model GroupMember {
   user     User     @relation(fields: [userId], references: [id])
 
   @@unique([groupId, userId])
+  @@index([userId])
 }
 
 model GroupInvitation {
@@ -76,6 +79,8 @@ model GroupInvitation {
   sender     User             @relation("GroupInvitationSender", fields: [senderId], references: [id])
 
   @@unique([groupId, receiverId])
+  @@index([receiverId])
+  @@index([senderId])
 }
 
 model Transaction {
@@ -94,6 +99,10 @@ model Transaction {
   paidBy      User                 @relation("PaidBy", fields: [paidById], references: [id])
   splits      TransactionSplit[]
   activityLog ActivityLog[]
+
+  @@index([groupId, createdAt])
+  @@index([paidById])
+  @@index([createdById])
 }
 
 model TransactionSplit {
@@ -105,6 +114,7 @@ model TransactionSplit {
   user          User        @relation(fields: [userId], references: [id])
 
   @@unique([userId, transactionId])
+  @@index([transactionId])
 }
 
 model Friendships {
@@ -118,6 +128,7 @@ model Friendships {
   sender     User             @relation("FriendshipSender", fields: [senderId], references: [id])
 
   @@unique([senderId, receiverId])
+  @@index([receiverId])
 }
 
 model ActivityLog {
@@ -138,6 +149,7 @@ model ActivityLog {
   @@index([groupId])
   @@index([transactionId])
   @@index([targetUserId])
+  @@index([createdAt])
 }
 
 model Task {
@@ -153,6 +165,7 @@ model Task {
   updatedAt   DateTime @updatedAt
 
   @@index([groupId])
+  @@index([createdById])
 }
 
 enum FriendshipStatus {
