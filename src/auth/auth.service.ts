@@ -530,16 +530,10 @@ export class AuthService {
       throw new UnauthorizedException('Google account not verified');
     }
 
-    let user = await this.usersService.findUnique({ email: payload.email });
-
-    if (!user) {
-      user = await this.usersService.create({
-        name: payload.name ?? payload.given_name ?? payload.email.split('@')[0],
-        email: payload.email,
-        provider: 'google',
-        emailVerified: true,
-      });
-    }
+    const user = await this.usersService.findOrCreateGoogleUser(
+      payload.email,
+      payload.name ?? payload.given_name ?? payload.email.split('@')[0],
+    );
 
     const accessToken = await this.jwtService.signAsync(
       { id: user.id },

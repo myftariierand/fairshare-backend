@@ -98,6 +98,30 @@ export class UsersService {
     return user;
   }
 
+  // Google has confirmed who owns this email, which an unverified account never proved. Anyone
+  // could have registered it to wait for the real owner, so their password must not survive.
+  async findOrCreateGoogleUser(email: string, name: string): Promise<User> {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await this.findUnique({ email: normalizedEmail });
+
+    if (!user) {
+      return this.create({
+        name,
+        email: normalizedEmail,
+        provider: 'google',
+        emailVerified: true,
+      });
+    }
+
+    if (user.emailVerified) return user;
+
+    return this.prisma.user.update({
+      where: { id: user.id },
+      data: { password: null, provider: 'google', emailVerified: true },
+    });
+  }
+
   async findFriendRequests(userId: string) {
     try {
       return await this.prisma.friendships.findMany({
