@@ -31,6 +31,7 @@ import {
 import { UserId } from 'src/users/user.decorator';
 
 import { ThrottleByClient } from 'src/throttling';
+import { coverUploadOptions } from 'src/cloudinary/cover-upload';
 
 @Controller('groups')
 export class GroupsController {
@@ -68,7 +69,7 @@ export class GroupsController {
 
   @ThrottleByClient(20)
   @Post()
-  @UseInterceptors(FileInterceptor('cover'))
+  @UseInterceptors(FileInterceptor('cover', coverUploadOptions))
   createGroup(
     @UserId() userId,
     @Body() { invite, ...createGroupDto }: CreateGroupDto,
@@ -79,7 +80,7 @@ export class GroupsController {
 
   @ThrottleByClient(20)
   @Patch(':groupId')
-  @UseInterceptors(FileInterceptor('cover'))
+  @UseInterceptors(FileInterceptor('cover', coverUploadOptions))
   updateGroup(
     @UserId() userId,
     @Param() { groupId }: UpdateParamsDto,

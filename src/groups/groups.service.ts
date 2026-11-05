@@ -134,30 +134,38 @@ export class GroupsService {
       groupCreateInput.cover = uploadResult.public_id;
     }
 
-    const group = await this.prisma.group.create({
-      data: {
-        ...groupCreateInput,
-        createdBy: {
-          connect: {
-            id: userId,
-          },
-        },
-        members: {
-          connectOrCreate: {
-            where: {
+    const group = await this.prisma.group
+      .create({
+        data: {
+          ...groupCreateInput,
+          createdBy: {
+            connect: {
               id: userId,
             },
-            create: {
-              user: {
-                connect: {
-                  id: userId,
+          },
+          members: {
+            connectOrCreate: {
+              where: {
+                id: userId,
+              },
+              create: {
+                user: {
+                  connect: {
+                    id: userId,
+                  },
                 },
               },
             },
           },
         },
-      },
-    });
+      })
+      .catch(async (error) => {
+        if (groupCreateInput.cover) {
+          await this.deleteCoverFile(groupCreateInput.cover);
+        }
+
+        throw error;
+      });
 
     await this.activityLogsService.createActivityLog({
       action: 'GROUP_CREATED',
@@ -187,6 +195,9 @@ export class GroupsService {
     newCover: Express.Multer.File,
     removeCover = false,
   ) {
+    // Set once the new image is uploaded, so it isn't left behind if saving fails
+    let uploadedCover: string | undefined;
+
     try {
       const foundGroup = await this.prisma.group.findUnique({
         where: { id: groupId, members: { some: { userId } } },
@@ -196,11 +207,9 @@ export class GroupsService {
         throw new NotFoundException({ message: 'Group not found!' });
 
       if (newCover) {
-        if (foundGroup.cover)
-          await this.cloudinaryService.deleteFile(foundGroup.cover);
-
         const uploadResult = await this.cloudinaryService.uploadFile(newCover);
-        updateGroupDto.cover = uploadResult.public_id;
+        uploadedCover = uploadResult.public_id;
+        updateGroupDto.cover = uploadedCover;
       } else if (removeCover) {
         updateGroupDto.cover = null;
       }
@@ -214,7 +223,8 @@ export class GroupsService {
         include: { members: { include: { user: true } } },
       });
 
-      if (!newCover && removeCover && foundGroup.cover) {
+      // Only now is the old image safe to delete: everything else has worked
+      if ((newCover || removeCover) && foundGroup.cover) {
         await this.deleteCoverFile(foundGroup.cover);
       }
 
@@ -238,11 +248,15 @@ export class GroupsService {
 
       return response;
     } catch (error) {
+      if (uploadedCover) await this.deleteCoverFile(uploadedCover);
+
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
           throw new NotFoundException(error.meta?.cause);
         }
       }
+
+      throw error;
     }
   }
 
