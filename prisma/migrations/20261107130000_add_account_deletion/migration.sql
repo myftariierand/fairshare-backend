@@ -1,0 +1,6 @@
+-- AlterEnum
+ALTER TYPE "ActivityAction" ADD VALUE 'USER_DELETED';
+ALTER TYPE "ActivityAction" ADD VALUE 'ADMIN_RESET_PASSWORD';
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "deletedAt" TIMESTAMP(3);

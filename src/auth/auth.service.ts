@@ -18,6 +18,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { LoginDto, RegisterDto } from 'src/auth/schema';
 
 import { UsersService } from 'src/users/users.service';
+import { AccountDeletionService } from 'src/users/account-deletion.service';
 import { DatabaseService } from 'src/database/database.service';
 import { EmailService } from 'src/email/email.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
@@ -43,6 +44,7 @@ export class AuthService {
   private readonly ACCESS_TOKEN_EXPIRY = '15m';
 
   constructor(
+    private accountDeletionService: AccountDeletionService,
     private usersService: UsersService,
     private jwtService: JwtService,
     private prisma: DatabaseService,
@@ -199,6 +201,37 @@ export class AuthService {
       this.logger.error('Unexpected error during registration', error);
       throw error;
     }
+  }
+
+  // Asked again here because someone holding an unlocked device shouldn't be able to do this
+  async deleteAccount(
+    userId: string,
+    password: string | undefined,
+    response: Response,
+  ) {
+    const user = await this.usersService.findUnique(
+      { id: userId },
+      { omit: { password: false } },
+    );
+
+    // Matches the clients, which only ask accounts that sign in with a password
+    if (
+      user?.provider === 'local' &&
+      user.password &&
+      !(await bcrypt.compare(password ?? '', user.password))
+    ) {
+      throw new ForbiddenException('Incorrect password');
+    }
+
+    await this.accountDeletionService.deleteAccount(userId, userId);
+
+    response.clearCookie('jwt', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+    });
+
+    return { message: 'Account deleted' };
   }
 
   async logout(refreshToken: string, response: Response) {

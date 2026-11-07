@@ -18,6 +18,7 @@ import { Cookies, Public } from 'src/auth/auth.decorators';
 
 import {
   ChangePasswordDto,
+  DeleteAccountDto,
   ForgotPasswordDto,
   GoogleMobileLoginDto,
   LoginDto,
@@ -113,6 +114,17 @@ export class AuthController {
       confirmPassword,
       cookieToken ?? refreshToken,
     );
+  }
+
+  @ThrottleByClient(5)
+  @HttpCode(HttpStatus.OK)
+  @Post('delete-account')
+  deleteAccount(
+    @Req() req,
+    @Body() { password }: DeleteAccountDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.authService.deleteAccount(req.id, password, response);
   }
 
   @Public()

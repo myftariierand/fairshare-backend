@@ -14,6 +14,8 @@ export class ActivityLogsService {
     const pageSize = 15;
 
     const where: Prisma.ActivityLogWhereInput = {
+      // For the admin audit trail. Released apps don't know how to display these.
+      action: { notIn: ['USER_DELETED', 'ADMIN_RESET_PASSWORD'] },
       OR: [
         { userId },
         { targetUserId: userId },

@@ -53,6 +53,13 @@ const UpdateProfileSchema = z.object({ name: NameSchema });
 
 export class UpdateProfileDto extends createZodDto(UpdateProfileSchema) {}
 
+const DeleteAccountSchema = z.object({
+  // Accounts created through Google have no password to send
+  password: z.string().optional(),
+});
+
+export class DeleteAccountDto extends createZodDto(DeleteAccountSchema) {}
+
 const ChangePasswordSchema = z.object({
   // Accounts created through Google have no current password to send
   password: z.string().optional(),

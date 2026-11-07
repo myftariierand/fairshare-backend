@@ -102,6 +102,13 @@ export class FriendshipsService {
       );
     }
 
+    const receiver = await this.prisma.user.findFirst({
+      where: { id: receiverId, deletedAt: null },
+      select: { id: true },
+    });
+
+    if (!receiver) throw new NotFoundException('User not found');
+
     const reverse = await this.prisma.friendships.findUnique({
       where: {
         senderId_receiverId: { senderId: receiverId, receiverId: userId },

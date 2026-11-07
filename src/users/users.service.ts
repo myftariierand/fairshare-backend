@@ -56,6 +56,7 @@ export class UsersService {
       where: {
         id: { not: userId },
         role: 'USER',
+        deletedAt: null,
         OR: [
           { name: { contains: q, mode: 'insensitive' } },
           // From the start only, so a search for "@gmail.com" can't list everyone on Gmail

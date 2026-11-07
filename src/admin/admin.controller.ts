@@ -14,6 +14,7 @@ import { AdminOnlyGuard } from 'src/admin/role.guard';
 import { AdminActivitiesQueryDto, UpdateBugReportDto } from 'src/schema/admin';
 import { IdParamsDto } from 'src/schema/common';
 import { AdminUpdateUserDto } from 'src/schema/user';
+import { UserId } from 'src/users/user.decorator';
 
 @Controller('admin')
 @UseGuards(AdminOnlyGuard)
@@ -37,15 +38,16 @@ export class AdminController {
 
   @Patch('users/:id')
   updateUser(
+    @UserId() adminId,
     @Param() { id }: IdParamsDto,
     @Body() { password }: AdminUpdateUserDto,
   ) {
-    return this.adminService.updateUser(id, password);
+    return this.adminService.updateUser(adminId, id, password);
   }
 
   @Delete('users/:id')
-  deleteUser(@Param() { id }: IdParamsDto) {
-    return this.adminService.deleteUser(id);
+  deleteUser(@UserId() adminId, @Param() { id }: IdParamsDto) {
+    return this.adminService.deleteUser(adminId, id);
   }
 
   @Get('bugs')

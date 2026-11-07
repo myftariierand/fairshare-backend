@@ -1,14 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
 import { BugStatus, Severity } from '@prisma/client';
 
+import { ActivityLogsService } from 'src/activity-logs/activity.service';
 import { DatabaseService } from 'src/database/database.service';
+import { AccountDeletionService } from 'src/users/account-deletion.service';
 import { AdminActivitiesQuery } from 'src/schema/admin';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: DatabaseService) {}
+  constructor(
+    private prisma: DatabaseService,
+    private activityLogsService: ActivityLogsService,
+    private accountDeletionService: AccountDeletionService,
+  ) {}
 
   getGroups() {
     return this.prisma.group.findMany({
@@ -62,7 +72,7 @@ export class AdminService {
 
   getUsers() {
     return this.prisma.user.findMany({
-      where: { role: 'USER' },
+      where: { role: 'USER', deletedAt: null },
       orderBy: { createdAt: 'desc' },
       include: {
         memberships: {
@@ -98,18 +108,45 @@ export class AdminService {
     });
   }
 
-  async updateUser(id: string, newPassword: string) {
+  async updateUser(adminId: string, id: string, newPassword: string) {
+    const target = await this.prisma.user.findFirst({
+      where: { id, deletedAt: null },
+      select: { role: true },
+    });
+
+    if (!target) throw new NotFoundException('User not found');
+
+    // It would let one admin take over another's account
+    if (target.role === 'ADMIN') {
+      throw new ForbiddenException('Admin passwords cannot be reset here.');
+    }
+
     const password = await bcrypt.hash(newPassword, 10);
 
-    const [user] = await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id }, data: { password } }),
-      this.prisma.refreshToken.deleteMany({ where: { userId: id } }),
-    ]);
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({
+        where: { id },
+        data: { password },
+      });
 
-    return user;
+      await tx.refreshToken.deleteMany({ where: { userId: id } });
+
+      await this.activityLogsService.createActivityLog(
+        {
+          action: 'ADMIN_RESET_PASSWORD',
+          user: { connect: { id: adminId } },
+          targetUser: { connect: { id } },
+        },
+        tx,
+      );
+
+      return user;
+    });
   }
 
-  deleteUser(id: string) {
-    return this.prisma.user.delete({ where: { id } });
+  async deleteUser(adminId: string, id: string) {
+    await this.accountDeletionService.deleteAccount(id, adminId);
+
+    return { message: 'User deleted' };
   }
 }

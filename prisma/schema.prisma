@@ -29,6 +29,7 @@ model User {
   emailVerificationOtp EmailVerificationOtp?
   provider             String                @default("local")
   role                 Role                  @default(USER)
+  deletedAt            DateTime?
   tasks                Task[]
   deviceTokens         DeviceToken[]
   refreshTokens        RefreshToken[]
@@ -192,6 +193,8 @@ enum ActivityAction {
   USER_UPDATED_PROFILE
   USER_CHANGED_PASSWORD
   USER_EMAIL_VERIFIED
+  USER_DELETED
+  ADMIN_RESET_PASSWORD
   FRIENDSHIP_REQUEST_SENT
   FRIENDSHIP_REQUEST_ACCEPTED
   FRIENDSHIP_REQUEST_REJECTED

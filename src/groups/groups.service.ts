@@ -364,6 +364,13 @@ export class GroupsService {
       throw new ForbiddenException('You are not a member of this group');
     }
 
+    const receiver = await this.prisma.user.findFirst({
+      where: { id: receiverId, deletedAt: null },
+      select: { id: true },
+    });
+
+    if (!receiver) throw new NotFoundException('User not found');
+
     const alreadyMember = await this.prisma.groupMember.findUnique({
       where: { groupId_userId: { groupId, userId: receiverId } },
     });
