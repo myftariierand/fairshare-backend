@@ -38,6 +38,8 @@ type Entry<C> = {
   subject: (context: C) => string;
   preheader: (context: C) => string;
   internal?: boolean;
+  // For an email the usual account footer doesn't describe
+  footer?: (context: C) => string;
   // Anything the templates need that callers shouldn't have to work out
   view?: (context: C) => Record<string, unknown>;
 };
@@ -113,7 +115,13 @@ const CATALOG: { [K in EmailKind]: Entry<EmailContexts[K]> } = {
   welcome: {
     subject: ({ name }) => `Welcome to FairShare, ${firstName(name)}`,
     preheader: () => 'Split your first bill in under a minute.',
-    view: ({ name }) => ({ firstName: firstName(name) }),
+    // Sent once and can ask for a donation, so it isn't one of the account emails that can't be turned off
+    footer: ({ email }) =>
+      `You got this email because you created a FairShare account with ${email}. We only send this once.`,
+    view: ({ name }) => ({
+      firstName: firstName(name),
+      donationUrl: process.env.DONATION_URL,
+    }),
   },
   'reset-password': {
     subject: ({ hasPassword }) =>
@@ -189,9 +197,11 @@ export const renderEmail = <K extends EmailKind>(
     preheader,
     appUrl: view.appUrl,
     internal: entry.internal,
-    footer: entry.internal
-      ? INTERNAL_FOOTER
-      : ACCOUNT_FOOTER((context as { email: string }).email),
+    footer:
+      entry.footer?.(context) ??
+      (entry.internal
+        ? INTERNAL_FOOTER
+        : ACCOUNT_FOOTER((context as { email: string }).email)),
   };
 
   return {

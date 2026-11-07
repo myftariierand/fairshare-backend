@@ -6,3 +6,8 @@
   {{> step number='3' title='Add expenses and settle up' text='FairShare works out who owes whom.'}}
 {{/steps}}
 {{> button label='Create your first group' url=appUrl}}
+{{#if donationUrl}}
+  {{> divider}}
+  {{#> p}}<strong>Help keep FairShare running</strong><br />FairShare is free to use. If you’d like to help with development and server costs, you can give any amount you like. It’s completely optional.{{/p}}
+  {{> button-outline label='Support FairShare' url=donationUrl}}
+{{/if}}

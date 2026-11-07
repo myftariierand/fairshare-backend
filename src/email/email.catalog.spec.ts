@@ -165,4 +165,53 @@ describe('renderEmail', () => {
     );
     delete process.env.SUPPORT_EMAIL;
   });
+
+  describe('donation section in the welcome email', () => {
+    const context = { email: 'a@test.dev', name: 'Maya Chen' };
+
+    afterEach(() => {
+      delete process.env.DONATION_URL;
+    });
+
+    it('is left out when there is no link', () => {
+      const { html, text } = renderEmail('welcome', context);
+
+      expect(html).not.toContain('Support FairShare');
+      expect(text).not.toContain('Support FairShare');
+    });
+
+    it('comes after the main button, in both versions', () => {
+      process.env.DONATION_URL = 'https://donate.test/fairshare';
+
+      const { html, text } = renderEmail('welcome', context);
+
+      for (const part of [html, text]) {
+        expect(part.indexOf('Create your first group')).toBeLessThan(
+          part.indexOf('Support FairShare'),
+        );
+        expect(part).toContain('It’s completely optional.');
+      }
+      expect(html).toContain('href="https://donate.test/fairshare"');
+      expect(text).toContain('https://donate.test/fairshare');
+    });
+
+    it('stays out of every other email', () => {
+      process.env.DONATION_URL = 'https://donate.test/fairshare';
+
+      const { html } = renderEmail('verify-email', {
+        email: 'a@test.dev',
+        code: '482915',
+        expiresInMinutes: 5,
+      });
+
+      expect(html).not.toContain('donate.test');
+    });
+
+    it('no longer calls this an email that can’t be turned off', () => {
+      const { text } = renderEmail('welcome', context);
+
+      expect(text).not.toContain('can’t be turned off');
+      expect(text).toContain('We only send this once.');
+    });
+  });
 });

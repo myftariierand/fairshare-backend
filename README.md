@@ -42,6 +42,7 @@ Build with `npm run build` and start with `npm run start:prod`. Run `npx prisma 
 - Point the platform's health check at `GET /health`, which returns 503 if the database can't be reached.
 - `NOTIFICATION_EMAIL` is optional. Without it, no sign-up or bug report notices are sent.
 - `SUPPORT_EMAIL` is optional. Without it, the account-deleted email has no contact line, which leaves someone who didn't delete their account with nowhere to go.
+- `DONATION_URL` is optional. Without it, the welcome email has no donation section. Keep donation links out of the mobile app, because the app stores have rules about asking for payments there.
 - Emails load their logo from `<CLIENT_ORIGIN>/email/logo-64.png`, which the web app serves.
 
 ## Running one instance only
