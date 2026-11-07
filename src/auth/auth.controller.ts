@@ -177,7 +177,7 @@ export class AuthController {
     });
 
     if (user) {
-      await this.otpService.sendOtp(user);
+      this.otpService.sendOtpInBackground(user);
     }
     return { message: 'If that email is registered, a code has been sent.' };
   }

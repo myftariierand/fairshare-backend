@@ -12,7 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Prisma, Role, User } from '@prisma/client';
 import { Request, Response } from 'express';
 import * as bcrypt from 'bcrypt';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 
 import { LoginDto, RegisterDto } from 'src/auth/schema';
@@ -28,6 +28,12 @@ import {
   REFRESH_TOKEN_EXPIRY_MS,
   RefreshTokenService,
 } from 'src/auth/refresh-token.service';
+
+// Compared against when there's no real password to check. Nothing can match it.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(
+  randomBytes(32).toString('hex'),
+  10,
+);
 
 @Injectable()
 export class AuthService {
@@ -63,6 +69,14 @@ export class AuthService {
     };
   }
 
+  // Always does the slow hash check. Skipping it when there's no password to compare would make
+  // unknown emails answer visibly faster, which tells anyone which addresses have accounts.
+  private async passwordMatches(password: string, hash?: string | null) {
+    const matches = await bcrypt.compare(password, hash ?? DUMMY_PASSWORD_HASH);
+
+    return !!hash && matches;
+  }
+
   private setRefreshCookie(response: Response, refreshToken: string) {
     response.cookie('jwt', refreshToken, {
       httpOnly: true,
@@ -86,20 +100,18 @@ export class AuthService {
       { omit: { password: false } },
     );
 
-    if (!user)
-      throw new NotFoundException(
-        'It seems you don’t have an account with us. Please register to get started.',
-      );
+    const passMatch = await this.passwordMatches(
+      loginDto.password,
+      user?.password,
+    );
 
-    const { password, ...rest } = user;
-
-    const passMatch =
-      password !== null && (await bcrypt.compare(loginDto.password, password));
-
-    if (!passMatch)
+    if (!user || !passMatch)
       throw new UnauthorizedException(
         'Invalid email or password. Please check your credentials.',
       );
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...rest } = user;
 
     const { accessToken, refreshToken } = await this.issueTokens(user.id);
 
@@ -426,29 +438,36 @@ export class AuthService {
       { omit: { password: false } },
     );
 
+    // Not awaited: waiting for the email, or failing with it, would give away that the account exists
     if (user) {
-      const resetToken = await this.jwtService.signAsync(
-        { id: user.id, pwd: this.passwordFingerprint(user.password) },
-        {
-          secret: process.env.RESET_PASSWORD_SECRET,
-          expiresIn: '1h',
-        },
-      );
-
-      const resetUrl = `${process.env.CLIENT_ORIGIN}/reset-password?token=${resetToken}`;
-
-      const html = renderTemplate('reset-password', { resetUrl });
-
-      await this.emailService.sendEmail({
-        to: user.email,
-        subject: `FairShare Password Reset`,
-        html,
+      this.sendResetEmail(user).catch((error) => {
+        this.logger.error('Failed to send password reset email', error);
       });
     }
 
     return {
       message: 'If the account exists, a reset email has been sent.',
     };
+  }
+
+  private async sendResetEmail(user: User) {
+    const resetToken = await this.jwtService.signAsync(
+      { id: user.id, pwd: this.passwordFingerprint(user.password) },
+      {
+        secret: process.env.RESET_PASSWORD_SECRET,
+        expiresIn: '1h',
+      },
+    );
+
+    const resetUrl = `${process.env.CLIENT_ORIGIN}/reset-password?token=${resetToken}`;
+
+    const html = renderTemplate('reset-password', { resetUrl });
+
+    await this.emailService.sendEmail({
+      to: user.email,
+      subject: `FairShare Password Reset`,
+      html,
+    });
   }
 
   async resetPassword(
@@ -507,12 +526,11 @@ export class AuthService {
     const invalidCreds = () =>
       new UnauthorizedException('Invalid email or password.');
 
-    if (!user) throw invalidCreds();
-
-    const passMatch =
-      user.password !== null &&
-      (await bcrypt.compare(loginDto.password, user.password));
-    if (!passMatch) throw invalidCreds();
+    const passMatch = await this.passwordMatches(
+      loginDto.password,
+      user?.password,
+    );
+    if (!user || !passMatch) throw invalidCreds();
 
     if (user.role !== Role.ADMIN) {
       // Log this — repeated hits are a signal someone's probing for admin access.

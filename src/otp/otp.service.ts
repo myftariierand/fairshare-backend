@@ -1,11 +1,6 @@
 import * as crypto from 'crypto';
 
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { generateOtp } from 'src/auth/otp.util';
 
 import { DatabaseService } from 'src/database/database.service';
@@ -25,6 +20,14 @@ export class OtpService {
     private activityLogsService: ActivityLogsService,
   ) {}
 
+  // For public endpoints. Not awaited: waiting for the email, or failing with it, would give away
+  // that the account exists.
+  sendOtpInBackground(user: User): void {
+    this.sendOtp(user).catch((error) => {
+      this.logger.error('Failed to send verification OTP', error);
+    });
+  }
+
   async sendOtp(user: User): Promise<void> {
     const existing = await this.prisma.emailVerificationOtp.findUnique({
       where: { userId: user.id },
@@ -32,11 +35,8 @@ export class OtpService {
 
     if (existing) {
       const sinceLastSent = Date.now() - existing.updatedAt.getTime();
-      if (sinceLastSent < this.RESEND_COOLDOWN_MS) {
-        throw new BadRequestException(
-          'Please wait before requesting another code.',
-        );
-      }
+      // Silent, because an error here would only ever appear for an email that has an account
+      if (sinceLastSent < this.RESEND_COOLDOWN_MS) return;
     }
 
     const { otp, hashedOtp, expiresAt } = generateOtp();
@@ -68,19 +68,9 @@ export class OtpService {
       data: { attempts: { increment: 1 } },
     });
 
-    if (!count) {
-      const record = await this.prisma.emailVerificationOtp.findUnique({
-        where: { userId: user.id },
-      });
-
-      if (record && record.expiresAt >= now) {
-        throw new ForbiddenException(
-          'Too many attempts. Please request a new code.',
-        );
-      }
-
-      return false;
-    }
+    // Too many attempts looks like a wrong code, because a distinct error would only ever appear
+    // for an email that has an account
+    if (!count) return false;
 
     const hashedInput = crypto.createHash('sha256').update(otp).digest('hex');
 
