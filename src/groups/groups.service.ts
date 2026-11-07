@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -213,28 +214,50 @@ export class GroupsService {
         updateGroupDto.cover = null;
       }
 
-      const response = await this.prisma.$transaction(async (tx) => {
-        const response = await tx.group.update({
-          where: {
-            id: groupId,
-            AND: [{ members: { some: { userId } } }],
-          },
-          data: updateGroupDto,
-          include: { members: { include: { user: true } } },
-        });
+      const response = await this.groupDebtService.withGroupLock(
+        groupId,
+        async (tx) => {
+          // Changing it would reinterpret every amount, with no conversion. It's checked under the
+          // lock so an expense can't be added between this check and the save.
+          const current = await tx.group.findUnique({
+            where: { id: groupId },
+            select: {
+              currency: true,
+              _count: { select: { transactions: true } },
+            },
+          });
 
-        await this.activityLogsService.createActivityLog(
-          {
-            action: 'GROUP_UPDATED',
-            snapshot: { group: response },
-            user: { connect: { id: userId } },
-            group: { connect: { id: groupId } },
-          },
-          tx,
-        );
+          if (
+            updateGroupDto.currency !== current?.currency &&
+            current?._count.transactions
+          ) {
+            throw new ConflictException(
+              "The currency can't be changed once the group has expenses.",
+            );
+          }
 
-        return response;
-      });
+          const response = await tx.group.update({
+            where: {
+              id: groupId,
+              AND: [{ members: { some: { userId } } }],
+            },
+            data: updateGroupDto,
+            include: { members: { include: { user: true } } },
+          });
+
+          await this.activityLogsService.createActivityLog(
+            {
+              action: 'GROUP_UPDATED',
+              snapshot: { group: response },
+              user: { connect: { id: userId } },
+              group: { connect: { id: groupId } },
+            },
+            tx,
+          );
+
+          return response;
+        },
+      );
 
       // Only now is the old image safe to delete: everything else has worked
       if ((newCover || removeCover) && foundGroup.cover) {
@@ -339,6 +362,14 @@ export class GroupsService {
 
     if (!membership) {
       throw new ForbiddenException('You are not a member of this group');
+    }
+
+    const alreadyMember = await this.prisma.groupMember.findUnique({
+      where: { groupId_userId: { groupId, userId: receiverId } },
+    });
+
+    if (alreadyMember) {
+      throw new ConflictException('This person is already in the group');
     }
 
     try {
@@ -764,10 +795,37 @@ export class GroupsService {
         );
       }
 
+      const members = await tx.groupMember.findMany({
+        where: { groupId },
+        orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
+        select: { userId: true },
+      });
+
+      if (!members.some((member) => member.userId === userId)) {
+        throw new NotFoundException('You are not a member of this group');
+      }
+
+      const nextOwner = members.find((member) => member.userId !== userId);
+
+      if (!nextOwner) {
+        throw new ConflictException(
+          "You're the last member, so delete the group instead of leaving it.",
+        );
+      }
+
       const member = await tx.groupMember.delete({
         where: { groupId_userId: { groupId, userId } },
         include: { group: true },
       });
+
+      // A group needs an owner who's in it: nobody else can remove members or delete it
+      const group =
+        member.group.createdById === userId
+          ? await tx.group.update({
+              where: { id: groupId },
+              data: { createdById: nextOwner.userId },
+            })
+          : member.group;
 
       await tx.groupInvitation.deleteMany({
         where: {
@@ -779,14 +837,14 @@ export class GroupsService {
       await this.activityLogsService.createActivityLog(
         {
           action: 'GROUP_MEMBER_LEFT',
-          snapshot: { group: member.group },
+          snapshot: { group },
           user: { connect: { id: userId } },
           group: { connect: { id: groupId } },
         },
         tx,
       );
 
-      return member.group;
+      return group;
     });
   }
 }

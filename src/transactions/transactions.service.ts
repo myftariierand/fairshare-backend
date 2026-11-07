@@ -99,8 +99,9 @@ export class TransactionsService {
     description: string,
     paidBy: string,
     splits: { userId: string; amount: number }[],
+    idempotencyKey?: string,
   ) {
-    const { foundGroup, groupMembersIds, transaction } =
+    const { foundGroup, groupMembersIds, transaction, repeated } =
       await this.groupDebtService.withGroupLock(groupId, async (tx) => {
         const foundGroup = await tx.group.findUnique({
           where: { id: groupId },
@@ -113,6 +114,22 @@ export class TransactionsService {
         );
         if (!groupMembersIds.includes(userId))
           throw new ForbiddenException('You are not a member of this group');
+
+        // The group lock means a repeat sent at the same moment waits here for the first to finish.
+        // A key used in another group fails on the unique index instead.
+        const existing =
+          idempotencyKey &&
+          (await tx.transaction.findFirst({
+            where: { groupId, createdById: userId, idempotencyKey },
+          }));
+        if (existing) {
+          return {
+            foundGroup,
+            groupMembersIds,
+            transaction: existing,
+            repeated: true,
+          };
+        }
 
         const userIds = [paidBy, ...splits.map((split) => split.userId)];
         const allUsersAreMembers = userIds.every((userId) =>
@@ -141,6 +158,7 @@ export class TransactionsService {
             amount,
             category,
             description,
+            idempotencyKey,
             createdBy: {
               connect: {
                 id: userId,
@@ -175,8 +193,10 @@ export class TransactionsService {
 
         await this.groupDebtService.updateRemainingDebts(groupId, tx);
 
-        return { foundGroup, groupMembersIds, transaction };
+        return { foundGroup, groupMembersIds, transaction, repeated: false };
       });
+
+    if (repeated) return transaction;
 
     const member = foundGroup.members.find(
       (member) => member.userId === userId,

@@ -84,22 +84,24 @@ model GroupInvitation {
 }
 
 model Transaction {
-  id          String               @id @default(uuid())
-  amount      Decimal              @db.Decimal(10, 2)
-  description String
-  type        TransactionType      @default(EXPENSE)
-  category    TransactionCategory? @default(OTHER)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  groupId     String
-  paidById    String
-  createdById String
-  createdBy   User                 @relation("CreatedBy", fields: [createdById], references: [id])
-  group       Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  paidBy      User                 @relation("PaidBy", fields: [paidById], references: [id])
-  splits      TransactionSplit[]
-  activityLog ActivityLog[]
+  id             String               @id @default(uuid())
+  amount         Decimal              @db.Decimal(10, 2)
+  description    String
+  type           TransactionType      @default(EXPENSE)
+  category       TransactionCategory? @default(OTHER)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  groupId        String
+  paidById       String
+  createdById    String
+  idempotencyKey String?
+  createdBy      User                 @relation("CreatedBy", fields: [createdById], references: [id])
+  group          Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  paidBy         User                 @relation("PaidBy", fields: [paidById], references: [id])
+  splits         TransactionSplit[]
+  activityLog    ActivityLog[]
 
+  @@unique([createdById, idempotencyKey])
   @@index([groupId, createdAt])
   @@index([paidById])
   @@index([createdById])

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { Friendships, Prisma } from '@prisma/client';
 
@@ -92,6 +96,24 @@ export class FriendshipsService {
   }
 
   async sendRequest(userId: string, receiverId: string) {
+    if (userId === receiverId) {
+      throw new BadRequestException(
+        "You can't send a friend request to yourself",
+      );
+    }
+
+    const reverse = await this.prisma.friendships.findUnique({
+      where: {
+        senderId_receiverId: { senderId: receiverId, receiverId: userId },
+      },
+    });
+
+    // They already asked, so both want this. Already being friends is like sending it twice.
+    if (reverse?.status === 'PENDING') {
+      return this.acceptRequest(userId, reverse.id);
+    }
+    if (reverse) return;
+
     try {
       const response = await this.prisma.$transaction(async (tx) => {
         const response = await tx.friendships.create({

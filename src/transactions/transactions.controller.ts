@@ -55,6 +55,7 @@ export class TransactionsController {
       createTransactionDto.description,
       createTransactionDto.paidBy,
       createTransactionDto.splits,
+      createTransactionDto.idempotencyKey,
     );
   }
 

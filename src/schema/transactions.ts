@@ -8,6 +8,8 @@ import { text } from 'src/schema/common';
 const DescriptionSchema = text(255, 4);
 
 const CreateTransactionSchema = z.object({
+  // Set by the client once per expense it means to add, so sending it again can't add a second one
+  idempotencyKey: z.string().min(8).max(64).optional(),
   groupId: z.string().uuid(),
   amount: z.number().positive(),
   category: z.nativeEnum(TransactionCategory),
