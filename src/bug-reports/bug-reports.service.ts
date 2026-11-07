@@ -2,10 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { DatabaseService } from 'src/database/database.service';
 import { EmailService } from 'src/email/email.service';
+import { sendInBackground } from 'src/email/send-in-background';
 
 import { CreateBugReportDto } from 'src/schema/bug-reports';
-
-import { renderTemplate } from 'templates/render-template';
 
 @Injectable()
 export class BugReportsService {
@@ -24,21 +23,21 @@ export class BugReportsService {
     const to = process.env.NOTIFICATION_EMAIL;
 
     if (to) {
-      const html = renderTemplate('bug-report-notification', {
-        title: bug.title,
-        description: bug.description,
-        severity: bug.severity,
-        name: bug.name,
-        email: bug.email,
-        device: bug.device,
-        createdAt: bug.createdAt.toISOString(),
-      });
-
-      this.emailService
-        .sendEmail({ to, subject: `New Bug Report - ${bug.severity}`, html })
-        .catch((err) => {
-          this.logger.error('Failed to send bug report email', err);
-        });
+      sendInBackground(
+        this.emailService,
+        this.logger,
+        to,
+        'bug-report-notification',
+        {
+          title: bug.title,
+          description: bug.description,
+          severity: bug.severity,
+          name: bug.name,
+          email: bug.email,
+          device: bug.device,
+          createdAt: bug.createdAt,
+        },
+      );
     }
 
     return bug;

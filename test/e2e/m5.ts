@@ -26,7 +26,7 @@ let unhandled = 0;
 process.on('unhandledRejection', () => { unhandled++; });
 
 (async () => {
-  const sent: { to: string; html: string }[] = [];
+  const sent: { to: string; subject: string; html: string; text: string }[] = [];
   let emailFails = false;
   const mod = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(require('@nestjs/throttler').ThrottlerStorage).useValue({ increment: async () => ({ totalHits: 1, timeToExpire: 60, isBlocked: false, timeToBlockExpire: 0 }) })
@@ -134,6 +134,9 @@ process.on('unhandledRejection', () => { unhandled++; });
   check('email outage looks the same', shape(await sendCode('timing2@test.dev')), shape(unknownS));
   await sleep(500);
   emailFails = false;
+  await sendCode('timing2@test.dev');
+  await sleep(500);
+  check('after an outage the next request still sends a code', sent.filter((e) => e.to === 'timing2@test.dev').length, 1);
 
   console.log('--- checking a verification code');
   const verify = (email: string, otp: string) => post('/auth/verify-email/verify', { email, otp });
@@ -143,7 +146,7 @@ process.on('unhandledRejection', () => { unhandled++; });
   check('wrong code looks the same', shape(await verify('fresh@test.dev', '000000')), shape(unknownV));
   for (let i = 0; i < 5; i++) await verify('fresh@test.dev', '000000');
   check('locked out by too many guesses looks the same', shape(await verify('fresh@test.dev', '000000')), shape(unknownV));
-  const firstCode = sent.find((e) => e.to === 'fresh@test.dev')?.html.match(/\d{6}/)?.[0] as string;
+  const firstCode = sent.find((e) => e.to === 'fresh@test.dev')?.text.match(/\d{6}/)?.[0] as string;
   check('the right code no longer works once locked', (await verify('fresh@test.dev', firstCode)).body.verified, false);
 
   console.log('--- getting out of a lockout');
@@ -152,7 +155,7 @@ process.on('unhandledRejection', () => { unhandled++; });
   sent.length = 0;
   await sendCode('fresh@test.dev');
   await sleep(500);
-  const secondCode = sent.find((e) => e.to === 'fresh@test.dev')?.html.match(/\d{6}/)?.[0] as string;
+  const secondCode = sent.find((e) => e.to === 'fresh@test.dev')?.text.match(/\d{6}/)?.[0] as string;
   check('new code is sent', !!secondCode, true);
   check('new code verifies', (await verify('fresh@test.dev', secondCode)).body.verified, true);
   check('account is verified', (await db.user.findUnique({ where: { email: 'fresh@test.dev' } })).emailVerified, true);

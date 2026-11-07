@@ -10,6 +10,8 @@ import { Prisma } from '@prisma/client';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { DatabaseService } from 'src/database/database.service';
+import { EmailService } from 'src/email/email.service';
+import { sendInBackground } from 'src/email/send-in-background';
 import { GroupDebtService } from 'src/group-debt/groupDebt.service';
 
 const DELETED_USER_NAME = 'Deleted user';
@@ -23,13 +25,14 @@ export class AccountDeletionService {
     private readonly groupDebtService: GroupDebtService,
     private readonly activityLogsService: ActivityLogsService,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly emailService: EmailService,
   ) {}
 
   // The row stays, as "Deleted user", because other people's expenses and balances point at it.
   // Everything that identifies the person goes. Being owed money blocks this as well as owing it:
   // only the person owed can mark a debt as paid, so their debtors could never settle up.
   async deleteAccount(userId: string, deletedBy: string) {
-    const covers = await this.prisma.$transaction(
+    const { covers, user } = await this.prisma.$transaction(
       async (tx) => {
         const user = await tx.user.findFirst({
           where: { id: userId, deletedAt: null },
@@ -104,7 +107,8 @@ export class AccountDeletionService {
           tx,
         );
 
-        return covers;
+        // Read before the update above, because this is the only copy of the address now
+        return { covers, user };
       },
       // Rewrites every log that mentions them, on top of waiting for each of their groups
       { maxWait: 10_000, timeout: 60_000 },
@@ -118,6 +122,21 @@ export class AccountDeletionService {
         }),
       ),
     );
+
+    // An unverified address might not belong to whoever typed it in at sign-up
+    if (user.emailVerified) {
+      sendInBackground(
+        this.emailService,
+        this.logger,
+        user.email,
+        'account-deleted',
+        {
+          email: user.email,
+          byAdmin: deletedBy !== userId,
+          deletedAt: new Date(),
+        },
+      );
+    }
   }
 
   // Returns the cover file to remove if this was the last member and the group went with them

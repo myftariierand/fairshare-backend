@@ -41,6 +41,8 @@ Build with `npm run build` and start with `npm run start:prod`. Run `npx prisma 
 - Set `NODE_ENV=production` to get JSON logs.
 - Point the platform's health check at `GET /health`, which returns 503 if the database can't be reached.
 - `NOTIFICATION_EMAIL` is optional. Without it, no sign-up or bug report notices are sent.
+- `SUPPORT_EMAIL` is optional. Without it, the account-deleted email has no contact line, which leaves someone who didn't delete their account with nowhere to go.
+- Emails load their logo from `<CLIENT_ORIGIN>/email/logo-64.png`, which the web app serves.
 
 ## Running one instance only
 
@@ -50,4 +52,5 @@ Live events, event stream tickets and rate limit counts are all held in memory. 
 
 - **Money:** stored as `Decimal(10, 2)` and calculated in whole cents. Anything that reads balances and then acts on them runs inside `withGroupLock`.
 - **Deleted users:** the row stays, as "Deleted user", because other people's expenses point at it. See `AccountDeletionService`.
+- **Emails:** each has an entry in `src/email/email.catalog.ts` and a `.hbs` and `.txt.hbs` pair in `templates/`, built from `templates/partials`. Styles stay inline because many mail clients drop style blocks.
 - **Passwords and invite tokens:** left out of every query by a global omit in `DatabaseService`. Code that needs one has to ask for it.

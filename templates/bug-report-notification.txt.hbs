@@ -1,0 +1,23 @@
+{{severity}}
+{{title}}
+
+Description:
+{{description}}
+
+{{#if device}}
+Device:
+{{device}}
+
+{{/if}}
+{{#if name}}
+Reported by: {{name}}
+{{/if}}
+{{#if email}}
+Email: {{email}}
+{{/if}}
+{{#unless name}}
+{{#unless email}}
+Reported by: Anonymous
+{{/unless}}
+{{/unless}}
+Submitted: {{submittedOn}}

@@ -3,10 +3,9 @@ import * as bcrypt from 'bcrypt';
 
 import { DatabaseService } from 'src/database/database.service';
 import { EmailService } from 'src/email/email.service';
+import { sendInBackground } from 'src/email/send-in-background';
 
 import { Prisma, User } from '@prisma/client';
-
-import { renderTemplate } from 'templates/render-template';
 
 const MIN_SEARCH_LENGTH = 2;
 
@@ -106,21 +105,28 @@ export class UsersService {
     const to = process.env.NOTIFICATION_EMAIL;
 
     if (to) {
-      const html = renderTemplate('new-user-registered', {
-        name: user.name,
-        email: user.email,
-        registeredAt: user.createdAt,
-        provider: user.provider,
-      });
-
-      this.emailService
-        .sendEmail({ to, subject: `New user registered`, html })
-        .catch((err) => {
-          this.logger?.error('Failed to send new-user notification email', err);
-        });
+      sendInBackground(
+        this.emailService,
+        this.logger,
+        to,
+        'new-user-registered',
+        {
+          name: user.name,
+          email: user.email,
+          registeredAt: user.createdAt,
+          provider: user.provider,
+        },
+      );
     }
 
     return user;
+  }
+
+  private sendWelcome(user: User) {
+    sendInBackground(this.emailService, this.logger, user.email, 'welcome', {
+      email: user.email,
+      name: user.name,
+    });
   }
 
   // Google has confirmed who owns this email, which an unverified account never proved. Anyone
@@ -131,12 +137,16 @@ export class UsersService {
     const user = await this.findUnique({ email: normalizedEmail });
 
     if (!user) {
-      return this.create({
+      const created = await this.create({
         name,
         email: normalizedEmail,
         provider: 'google',
         emailVerified: true,
       });
+
+      this.sendWelcome(created);
+
+      return created;
     }
 
     if (user.emailVerified) return user;
@@ -149,6 +159,8 @@ export class UsersService {
       this.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
       this.prisma.deviceToken.deleteMany({ where: { userId: user.id } }),
     ]);
+
+    this.sendWelcome(updated);
 
     return updated;
   }

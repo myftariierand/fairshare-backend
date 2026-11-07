@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { generateOtp, hashOtp } from 'src/auth/otp.util';
+import { generateOtp, hashOtp, OTP_EXPIRY_MINUTES } from 'src/auth/otp.util';
 
 import { DatabaseService } from 'src/database/database.service';
+import { renderEmail } from 'src/email/email.catalog';
 import { EmailService } from 'src/email/email.service';
+import { sendInBackground } from 'src/email/send-in-background';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 import { Prisma, User } from '@prisma/client';
 
@@ -27,6 +29,10 @@ export class OtpService {
   }
 
   async sendOtp(user: User): Promise<void> {
+    // Silent, like the cooldown below: this route is public, and anyone could otherwise send codes
+    // to an address that has no use for them
+    if (user.emailVerified) return;
+
     const { otp, hashedOtp, expiresAt } = generateOtp();
 
     // Replaced only if the last one is old enough, in one statement, so requests at the same moment
@@ -58,11 +64,28 @@ export class OtpService {
       }
     }
 
-    await this.emailService.sendEmail({
-      to: user.email,
-      subject: 'Your OTP Code',
-      html: `Your OTP code is: ${otp}`,
-    });
+    try {
+      await this.emailService.sendEmail({
+        to: user.email,
+        ...renderEmail('verify-email', {
+          email: user.email,
+          code: otp,
+          expiresInMinutes: OTP_EXPIRY_MINUTES,
+        }),
+      });
+    } catch (error) {
+      // Nobody received this code, so the cooldown shouldn't hold back the next request
+      await this.prisma.emailVerificationOtp
+        .updateMany({
+          where: { userId: user.id, otpHash: hashedOtp },
+          data: { updatedAt: new Date(0) },
+        })
+        .catch((resetError) => {
+          this.logger.error('Failed to reset OTP cooldown', resetError);
+        });
+
+      throw error;
+    }
   }
 
   async verifyOtp(user: User, otp: string): Promise<boolean> {
@@ -85,27 +108,42 @@ export class OtpService {
 
     const hashedInput = hashOtp(otp);
 
-    return this.prisma.$transaction(async (tx) => {
-      // The code is used up here, so the same code sent twice only counts once
-      const { count: matched } = await tx.emailVerificationOtp.deleteMany({
-        where: { userId: user.id, otpHash: hashedInput },
+    const { verified, firstTime } = await this.prisma.$transaction(
+      async (tx) => {
+        // The code is used up here, so the same code sent twice only counts once
+        const { count: matched } = await tx.emailVerificationOtp.deleteMany({
+          where: { userId: user.id, otpHash: hashedInput },
+        });
+
+        if (!matched) return { verified: false, firstTime: false };
+
+        // A code from before the account was verified, say through Google, can still be used
+        const { count: firstTime } = await tx.user.updateMany({
+          where: { id: user.id, emailVerified: false },
+          data: { emailVerified: true },
+        });
+
+        if (firstTime) {
+          await this.activityLogsService.createActivityLog(
+            {
+              user: { connect: { id: user.id } },
+              action: 'USER_EMAIL_VERIFIED',
+            },
+            tx,
+          );
+        }
+
+        return { verified: true, firstTime: !!firstTime };
+      },
+    );
+
+    if (firstTime) {
+      sendInBackground(this.emailService, this.logger, user.email, 'welcome', {
+        email: user.email,
+        name: user.name,
       });
+    }
 
-      if (!matched) return false;
-
-      await tx.user.update({
-        where: { id: user.id },
-        data: { emailVerified: true },
-      });
-      await this.activityLogsService.createActivityLog(
-        {
-          user: { connect: { id: user.id } },
-          action: 'USER_EMAIL_VERIFIED',
-        },
-        tx,
-      );
-
-      return true;
-    });
+    return verified;
   }
 }

@@ -19,10 +19,11 @@ import { LoginDto, RegisterDto } from 'src/auth/schema';
 import { UsersService } from 'src/users/users.service';
 import { AccountDeletionService } from 'src/users/account-deletion.service';
 import { DatabaseService } from 'src/database/database.service';
+import { renderEmail } from 'src/email/email.catalog';
 import { EmailService } from 'src/email/email.service';
+import { sendInBackground } from 'src/email/send-in-background';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 
-import { renderTemplate } from 'templates/render-template';
 import { OtpService } from 'src/otp/otp.service';
 import {
   REFRESH_TOKEN_EXPIRY_MS,
@@ -395,7 +396,7 @@ export class AuthService {
 
     const hashedPwd = await bcrypt.hash(newPassword, 10);
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const res = await tx.user.update({
         where: { id: userId },
         data: { password: hashedPwd },
@@ -413,6 +414,23 @@ export class AuthService {
 
       return res;
     });
+
+    // An unverified address might not belong to whoever typed it in at sign-up
+    if (user.emailVerified) {
+      sendInBackground(
+        this.emailService,
+        this.logger,
+        user.email,
+        'password-notice',
+        {
+          email: user.email,
+          variant: user.password === null ? 'added' : 'changed',
+          changedAt: new Date(),
+        },
+      );
+    }
+
+    return updated;
   }
 
   async updateProfile(id: string, data: Prisma.UserUpdateInput): Promise<User> {
@@ -505,12 +523,13 @@ export class AuthService {
 
     const resetUrl = `${process.env.CLIENT_ORIGIN}/reset-password?token=${resetToken}`;
 
-    const html = renderTemplate('reset-password', { resetUrl });
-
     await this.emailService.sendEmail({
       to: user.email,
-      subject: `FairShare Password Reset`,
-      html,
+      ...renderEmail('reset-password', {
+        email: user.email,
+        resetUrl,
+        hasPassword: user.password !== null,
+      }),
     });
   }
 
@@ -541,6 +560,14 @@ export class AuthService {
 
       await this.refreshTokens.revokeAll(user.id, undefined, tx);
     });
+
+    sendInBackground(
+      this.emailService,
+      this.logger,
+      user.email,
+      'password-notice',
+      { email: user.email, variant: 'reset', changedAt: new Date() },
+    );
 
     return { message: 'Password reset successfully' };
   }

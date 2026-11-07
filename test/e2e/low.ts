@@ -25,7 +25,7 @@ const check = (name: string, got: any, want: any) => {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
-  const sent: { to: string; subject: string; html: string }[] = [];
+  const sent: { to: string; subject: string; html: string; text: string }[] = [];
   const mod = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(require('@nestjs/throttler').ThrottlerStorage).useValue({ increment: async () => ({ totalHits: 1, timeToExpire: 60, isBlocked: false, timeToBlockExpire: 0 }) })
     .overrideProvider(EmailService).useValue({ sendEmail: async (e: any) => { sent.push(e); return {}; } })
@@ -47,18 +47,18 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const register = (email: string) => request(s).post('/auth/register').send({ name: 'New', email, password: 'long-enough-1', confirmPassword: 'long-enough-1' });
   check('sign up', (await register('new1@test.dev')).status, 201);
   await sleep(50);
-  const notice = sent.find((e) => e.subject === 'New user registered');
+  const notice = sent.find((e) => e.subject.startsWith('New sign-up'));
   check('  sent there', notice?.to, 'alerts@test.dev');
   check('  addressed to nobody in particular', notice?.html.includes('Erand'), false);
   check('bug report', (await request(s).post('/bug-reports').set(a.h).send({ title: 'It broke', description: 'It broke when I clicked' })).status, 201);
   await sleep(50);
-  check('  sent there', sent.find((e) => e.subject.startsWith('New Bug Report'))?.to, 'alerts@test.dev');
+  check('  sent there', sent.find((e) => e.subject.startsWith('[MINOR]'))?.to, 'alerts@test.dev');
   sent.length = 0;
   delete process.env.NOTIFICATION_EMAIL;
   check('with none configured, sign up still works', (await register('new2@test.dev')).status, 201);
   check('  bug reports too', (await request(s).post('/bug-reports').set(a.h).send({ title: 'It broke', description: 'It broke when I clicked' })).status, 201);
   await sleep(50);
-  check('  and no notice goes anywhere', sent.filter((e) => e.subject === 'New user registered' || e.subject.startsWith('New Bug Report')).length, 0);
+  check('  and no notice goes anywhere', sent.filter((e) => e.subject.startsWith('New sign-up') || e.subject.startsWith('[MINOR]')).length, 0);
 
   console.log('--- splits that don\'t add up are a bad request, not a permissions problem');
   const g = await db.group.create({ data: { name: 'Trip', currency: 'EUR', createdById: a.id, members: { create: [{ userId: a.id }, { userId: b.id }] } } });
@@ -80,7 +80,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   sent.length = 0;
   await request(s).post('/auth/verify-email/send').send({ email: fresh.email });
   await sleep(100);
-  const code = sent.find((e) => e.to === fresh.email)?.html.match(/\d{6}/)?.[0] as string;
+  const code = sent.find((e) => e.to === fresh.email)?.text.match(/\d{6}/)?.[0] as string;
   check('code is sent', /^\d{6}$/.test(code), true);
   const row = await db.emailVerificationOtp.findUnique({ where: { userId: fresh.id } });
   check('a plain hash of it isn\'t stored, which anyone could reverse', row.otpHash === createHash('sha256').update(code).digest('hex'), false);

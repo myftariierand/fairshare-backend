@@ -19,6 +19,7 @@ describe('AccountDeletionService snapshot scrubbing', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
   ) as any;
 
   const al = {

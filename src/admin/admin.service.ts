@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -9,15 +10,20 @@ import { BugStatus, Severity } from '@prisma/client';
 
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
 import { DatabaseService } from 'src/database/database.service';
+import { EmailService } from 'src/email/email.service';
+import { sendInBackground } from 'src/email/send-in-background';
 import { AccountDeletionService } from 'src/users/account-deletion.service';
 import { AdminActivitiesQuery } from 'src/schema/admin';
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     private prisma: DatabaseService,
     private activityLogsService: ActivityLogsService,
     private accountDeletionService: AccountDeletionService,
+    private emailService: EmailService,
   ) {}
 
   getGroups() {
@@ -123,7 +129,7 @@ export class AdminService {
 
     const password = await bcrypt.hash(newPassword, 10);
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.update({
         where: { id },
         data: { password },
@@ -143,6 +149,20 @@ export class AdminService {
 
       return user;
     });
+
+    // Otherwise they're signed out everywhere with no explanation. An unverified address might not
+    // belong to whoever typed it in at sign-up.
+    if (updated.emailVerified) {
+      sendInBackground(
+        this.emailService,
+        this.logger,
+        updated.email,
+        'password-notice',
+        { email: updated.email, variant: 'admin', changedAt: new Date() },
+      );
+    }
+
+    return updated;
   }
 
   async deleteUser(adminId: string, id: string) {

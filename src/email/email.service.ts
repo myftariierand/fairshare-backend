@@ -13,16 +13,19 @@ export class EmailService {
     to,
     subject,
     html,
+    text,
   }: {
     to: string | string[];
     subject: string;
     html: string;
+    text: string;
   }) {
     const { data, error } = await this.resend.emails.send({
       from: 'FairShare <no-reply@fairshare.email>',
       to,
       subject,
       html,
+      text,
     });
 
     if (error) {

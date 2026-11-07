@@ -1,0 +1,17 @@
+Your account has been deleted
+
+{{#if byAdmin}}
+A FairShare administrator deleted your account on {{deletedOn}}. Your name, email and password were removed.
+{{else}}
+Your name, email and password were removed on {{deletedOn}}. This can’t be undone.
+{{/if}}
+
+Shared expenses stay in your old groups under “Deleted user” so everyone’s balances still add up.
+
+{{#if byAdmin}}
+{{#if supportEmail}}
+Questions? Email {{supportEmail}}.
+{{/if}}
+{{else}}
+You’re welcome to sign up again with this address.{{#if supportEmail}} Didn’t do this? Email {{supportEmail}}.{{/if}}
+{{/if}}

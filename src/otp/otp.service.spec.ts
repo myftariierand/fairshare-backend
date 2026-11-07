@@ -77,6 +77,28 @@ describe('OtpService', () => {
     expect(logged).toHaveBeenCalledTimes(1);
   });
 
+  it('sends nothing to an account that is already verified', async () => {
+    const { service, prisma, email } = setup();
+
+    await service.sendOtp({ ...user, emailVerified: true });
+
+    expect(prisma.emailVerificationOtp.updateMany).not.toHaveBeenCalled();
+    expect(email.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('lifts the cooldown when the code could not be sent', async () => {
+    const { service, prisma, email } = setup({ replaced: 1 });
+    email.sendEmail.mockRejectedValue(new Error('provider down'));
+
+    await expect(service.sendOtp(user)).rejects.toThrow('provider down');
+
+    const { where, data } =
+      prisma.emailVerificationOtp.updateMany.mock.calls[1][0];
+    expect(where.userId).toBe(user.id);
+    expect(where.otpHash).toEqual(expect.any(String));
+    expect(data.updatedAt).toEqual(new Date(0));
+  });
+
   it('treats too many attempts like a wrong code', async () => {
     const { service } = setup();
 
