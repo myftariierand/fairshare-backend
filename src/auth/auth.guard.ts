@@ -38,9 +38,8 @@ export class AuthGuard implements CanActivate {
 
       request['id'] = payload.id;
       request['role'] = payload.role;
-    } catch (error) {
-      console.log(error);
-
+    } catch {
+      // Expected every time a token expires, so not worth logging
       throw new UnauthorizedException();
     }
 

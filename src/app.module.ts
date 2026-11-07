@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 
 import { PrismaExceptionFilter } from 'src/prisma-exception.filter';
+import { HealthController } from 'src/health.controller';
 
 import { DatabaseModule } from 'src/database/database.module';
 import { SseModule } from 'src/sse/sse.module';
@@ -44,6 +45,7 @@ import { validateEnv } from 'src/env.validation';
     TasksModule,
     DevicesModule,
   ],
+  controllers: [HealthController],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },
     { provide: APP_GUARD, useClass: AuthGuard },

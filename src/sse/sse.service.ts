@@ -2,6 +2,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  OnModuleDestroy,
   UnauthorizedException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
@@ -15,7 +16,7 @@ type UserStream = {
 };
 
 @Injectable()
-export class SseService {
+export class SseService implements OnModuleDestroy {
   // EventSource can't send headers, so the stream URL carries a ticket instead. It ends up
   // in access logs, which is why it only works once and only for a few seconds.
   private readonly TICKET_TTL_MS = 30 * 1000;
@@ -23,6 +24,12 @@ export class SseService {
 
   private tickets = new Map<string, { userId: string; expiresAt: number }>();
   private userStreams = new Map<string, UserStream>();
+
+  // An open stream never finishes by itself, so the server could never stop without this. Clients
+  // reconnect on their own.
+  onModuleDestroy() {
+    for (const { subject } of this.userStreams.values()) subject.complete();
+  }
 
   createTicket(userId: string): string {
     const now = Date.now();

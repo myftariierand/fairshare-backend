@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Audit production dependencies
+        # Only critical blocks. The known remaining issues wait on the Nest, Prisma and zod upgrades.
+        run: npm audit --omit=dev --audit-level=critical
+      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npx eslint "src/**/*.ts"
+      - run: npx jest
+      - run: npm run test:e2e

@@ -1,9 +1,16 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  OnApplicationShutdown,
+  OnModuleInit,
+} from '@nestjs/common';
 
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class DatabaseService extends PrismaClient implements OnModuleInit {
+export class DatabaseService
+  extends PrismaClient
+  implements OnModuleInit, OnApplicationShutdown
+{
   constructor() {
     super({
       omit: {
@@ -20,5 +27,10 @@ export class DatabaseService extends PrismaClient implements OnModuleInit {
 
   async onModuleInit() {
     await this.$connect();
+  }
+
+  // Runs after the server has stopped, so requests still in progress can finish first
+  async onApplicationShutdown() {
+    await this.$disconnect();
   }
 }

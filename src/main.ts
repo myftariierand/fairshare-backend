@@ -1,10 +1,9 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import * as cookieParser from 'cookie-parser';
 
 import { AppModule } from 'src/app.module';
-
-import { Prisma } from '@prisma/client';
+import { configureApp } from 'src/app.setup';
+import { JsonLogger } from 'src/json.logger';
 
 const logger = new Logger('Process');
 
@@ -18,22 +17,12 @@ process.on('unhandledRejection', (reason) => {
 });
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(
+    AppModule,
+    process.env.NODE_ENV === 'production' ? { logger: new JsonLogger() } : {},
+  );
 
-  // Exact for anything a Decimal(10, 2) column holds, and what the clients already expect
-  (Prisma.Decimal.prototype as any).toJSON = function () {
-    return this.toNumber();
-  };
-
-  app.enableCors({
-    origin: [
-      process.env.CLIENT_ORIGIN ?? '',
-      process.env.ADMIN_ORIGIN ?? '',
-      process.env.MOBILE_ORIGIN ?? '',
-    ],
-    credentials: true,
-  });
-  app.use(cookieParser());
+  configureApp(app);
 
   await app.listen(process.env.PORT ?? 3000);
 }
