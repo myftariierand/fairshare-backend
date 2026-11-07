@@ -6,7 +6,7 @@ import { generateOtp } from 'src/auth/otp.util';
 import { DatabaseService } from 'src/database/database.service';
 import { EmailService } from 'src/email/email.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
-import { User } from '@prisma/client';
+import { Prisma, User } from '@prisma/client';
 
 @Injectable()
 export class OtpService {
@@ -29,23 +29,36 @@ export class OtpService {
   }
 
   async sendOtp(user: User): Promise<void> {
-    const existing = await this.prisma.emailVerificationOtp.findUnique({
-      where: { userId: user.id },
-    });
-
-    if (existing) {
-      const sinceLastSent = Date.now() - existing.updatedAt.getTime();
-      // Silent, because an error here would only ever appear for an email that has an account
-      if (sinceLastSent < this.RESEND_COOLDOWN_MS) return;
-    }
-
     const { otp, hashedOtp, expiresAt } = generateOtp();
 
-    await this.prisma.emailVerificationOtp.upsert({
-      where: { userId: user.id },
-      create: { userId: user.id, otpHash: hashedOtp, expiresAt },
-      update: { otpHash: hashedOtp, expiresAt, attempts: 0 },
+    // Replaced only if the last one is old enough, in one statement, so requests at the same moment
+    // can't all see that it's fine to send
+    const { count } = await this.prisma.emailVerificationOtp.updateMany({
+      where: {
+        userId: user.id,
+        updatedAt: { lt: new Date(Date.now() - this.RESEND_COOLDOWN_MS) },
+      },
+      data: { otpHash: hashedOtp, expiresAt, attempts: 0 },
     });
+
+    if (!count) {
+      try {
+        await this.prisma.emailVerificationOtp.create({
+          data: { userId: user.id, otpHash: hashedOtp, expiresAt },
+        });
+      } catch (error) {
+        // One already exists, so this is inside the cooldown. Silent, because an error here would
+        // only ever appear for an email that has an account.
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          return;
+        }
+
+        throw error;
+      }
+    }
 
     await this.emailService.sendEmail({
       to: user.email,

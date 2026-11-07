@@ -1,14 +1,23 @@
+import { Prisma } from '@prisma/client';
+
 import { OtpService } from './otp.service';
 
 describe('OtpService', () => {
   const user = { id: 'u1', email: 'a@test.dev' } as any;
 
-  const setup = (existing?: { updatedAt: Date }) => {
+  const duplicate = () =>
+    new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+      code: 'P2002',
+      clientVersion: 'test',
+    });
+
+  const setup = ({ replaced = 0, createError = undefined as unknown } = {}) => {
     const prisma = {
       emailVerificationOtp: {
-        findUnique: jest.fn().mockResolvedValue(existing ?? null),
-        upsert: jest.fn().mockResolvedValue({}),
-        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        updateMany: jest.fn().mockResolvedValue({ count: replaced }),
+        create: createError
+          ? jest.fn().mockRejectedValue(createError)
+          : jest.fn().mockResolvedValue({}),
       },
     };
     const email = { sendEmail: jest.fn().mockResolvedValue({}) };
@@ -18,21 +27,41 @@ describe('OtpService', () => {
   };
 
   it('stays silent during the cooldown and sends nothing', async () => {
-    const { service, email } = setup({ updatedAt: new Date() });
+    const { service, email } = setup({ createError: duplicate() });
 
     await expect(service.sendOtp(user)).resolves.toBeUndefined();
 
     expect(email.sendEmail).not.toHaveBeenCalled();
   });
 
-  it('sends a new code once the cooldown has passed', async () => {
-    const { service, email } = setup({
-      updatedAt: new Date(Date.now() - 61 * 1000),
-    });
+  it('only replaces a code older than the cooldown', async () => {
+    const { service, prisma, email } = setup({ replaced: 1 });
 
     await service.sendOtp(user);
 
+    const { where } = prisma.emailVerificationOtp.updateMany.mock.calls[0][0];
+    expect(Date.now() - where.updatedAt.lt.getTime()).toBeGreaterThanOrEqual(
+      60 * 1000,
+    );
+    expect(prisma.emailVerificationOtp.create).not.toHaveBeenCalled();
     expect(email.sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends a first code', async () => {
+    const { service, prisma, email } = setup();
+
+    await service.sendOtp(user);
+
+    expect(prisma.emailVerificationOtp.create).toHaveBeenCalledTimes(1);
+    expect(email.sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't hide a real database failure", async () => {
+    const { service, email } = setup({ createError: new Error('down') });
+
+    await expect(service.sendOtp(user)).rejects.toThrow('down');
+
+    expect(email.sendEmail).not.toHaveBeenCalled();
   });
 
   it('survives an email failure when sending in the background', async () => {

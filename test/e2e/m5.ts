@@ -40,7 +40,7 @@ process.on('unhandledRejection', () => { unhandled++; });
     })
     .compile();
   const app = mod.createNestApplication({ logger: false });
-  await app.init();
+  await app.listen(0);
   const s = app.getHttpServer();
   const db = mod.get(DatabaseService);
   process.chdir(P);
@@ -65,7 +65,9 @@ process.on('unhandledRejection', () => { unhandled++; });
   const sameTime = (name: string, a: number, b: number) => {
     const ratio = Math.min(a, b) / Math.max(a, b);
     console.log(`      ${name}: ${a.toFixed(1)} ms vs ${b.toFixed(1)} ms`);
-    check(`  ${name} takes about as long`, ratio > 0.6, true);
+    // Medians of about 1 ms differ by a large ratio from noise alone. A real leak is the 35 ms hash or
+    // the 300 ms email, so a small gap passes whatever the ratio.
+    check(`  ${name} takes about as long`, ratio > 0.6 || Math.abs(a - b) < 15, true);
   };
 
   for (const [label, url] of [['login', '/auth/login'], ['admin login', '/auth/admin/login']]) {
@@ -116,6 +118,12 @@ process.on('unhandledRejection', () => { unhandled++; });
   check('send during cooldown looks the same', shape(coolS), shape(unknownS));
   await sleep(500);
   check('cooldown still limits to one email', sent.filter((e) => e.to === 'fresh@test.dev').length, 1);
+  await mk('burst@test.dev');
+  await Promise.all(Array.from({ length: 8 }, () => sendCode('burst@test.dev')));
+  await sleep(500);
+  check('eight requests at once send one email', sent.filter((e) => e.to === 'burst@test.dev').length, 1);
+  const burstOtp = await db.emailVerificationOtp.count({ where: { user: { email: 'burst@test.dev' } } });
+  check('  and leave one code', burstOtp, 1);
   await mk('timing@test.dev');
   await mk('timing2@test.dev');
   const unknownT = await median(() => sendCode('nobody@test.dev'));
