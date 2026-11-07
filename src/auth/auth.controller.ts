@@ -89,9 +89,14 @@ export class AuthController {
   logout(
     @Cookies('jwt') cookieToken: string,
     @Body('refreshToken') bodyToken: string,
+    @Body('deviceToken') deviceToken: unknown,
     @Res({ passthrough: true }) response: Response,
   ) {
-    return this.authService.logout(cookieToken ?? bodyToken, response);
+    return this.authService.logout(
+      cookieToken ?? bodyToken,
+      deviceToken,
+      response,
+    );
   }
 
   @Get('profile')

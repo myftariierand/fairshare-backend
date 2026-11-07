@@ -15,6 +15,7 @@ describe('UsersService.findOrCreateGoogleUser', () => {
   const prisma = {
     user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
     refreshToken: { deleteMany: jest.fn() },
+    deviceToken: { deleteMany: jest.fn() },
     $transaction: jest.fn(),
   };
   const email = { sendEmail: jest.fn().mockResolvedValue({}) };
@@ -73,6 +74,16 @@ describe('UsersService.findOrCreateGoogleUser', () => {
     await service.findOrCreateGoogleUser('owner@gmail.com', 'Owner');
 
     expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+    });
+  });
+
+  it("removes the previous holder's devices", async () => {
+    prisma.user.findUnique.mockResolvedValue(existing());
+
+    await service.findOrCreateGoogleUser('owner@gmail.com', 'Owner');
+
+    expect(prisma.deviceToken.deleteMany).toHaveBeenCalledWith({
       where: { userId: 'user-1' },
     });
   });

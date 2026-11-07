@@ -130,6 +130,7 @@ export class AdminService {
       });
 
       await tx.refreshToken.deleteMany({ where: { userId: id } });
+      await tx.deviceToken.deleteMany({ where: { userId: id } });
 
       await this.activityLogsService.createActivityLog(
         {

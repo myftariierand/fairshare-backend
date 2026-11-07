@@ -138,19 +138,22 @@ export class RefreshTokenService {
 
   async revokeSession(token: unknown) {
     const sessionId = parseSessionId(token);
-    if (!sessionId) return;
+    if (!sessionId) return null;
 
     const found = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: hash(token as string) },
     });
 
-    if (found?.sessionId === sessionId) {
-      await this.prisma.refreshToken.deleteMany({ where: { sessionId } });
-    }
+    if (found?.sessionId !== sessionId) return null;
+
+    await this.prisma.refreshToken.deleteMany({ where: { sessionId } });
+
+    return found.userId;
   }
 
   // Keeps the session behind exceptToken, so changing a password doesn't log out the person
-  // doing it
+  // doing it. Devices all go, or a phone an intruder registered would keep getting this person's
+  // notifications after they took the account back. Their own apps register again on launch.
   async revokeAll(
     userId: string,
     exceptToken?: unknown,
@@ -161,6 +164,8 @@ export class RefreshTokenService {
       (await client.refreshToken.findUnique({
         where: { tokenHash: hash(exceptToken as string) },
       }));
+
+    await client.deviceToken.deleteMany({ where: { userId } });
 
     await client.refreshToken.deleteMany({
       where: {

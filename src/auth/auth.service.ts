@@ -234,14 +234,22 @@ export class AuthService {
     return { message: 'Account deleted' };
   }
 
-  async logout(refreshToken: string, response: Response) {
+  async logout(refreshToken: string, deviceToken: unknown, response: Response) {
     if (!refreshToken)
       throw new HttpException(
         { status: HttpStatus.NO_CONTENT },
         HttpStatus.NO_CONTENT,
       );
 
-    await this.refreshTokens.revokeSession(refreshToken);
+    const userId = await this.refreshTokens.revokeSession(refreshToken);
+
+    // Only a real session of the owner can do this, so the route being public gives nothing away.
+    // Otherwise a signed-out phone keeps showing that person's notifications.
+    if (userId && typeof deviceToken === 'string') {
+      await this.prisma.deviceToken.deleteMany({
+        where: { token: deviceToken, userId },
+      });
+    }
 
     response.clearCookie('jwt', {
       httpOnly: true,

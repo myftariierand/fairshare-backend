@@ -147,6 +147,7 @@ export class UsersService {
         data: { password: null, provider: 'google', emailVerified: true },
       }),
       this.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+      this.prisma.deviceToken.deleteMany({ where: { userId: user.id } }),
     ]);
 
     return updated;

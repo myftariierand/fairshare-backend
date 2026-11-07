@@ -5,6 +5,12 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# The container name and port are fixed, so runs from different checkouts have to take turns
+if command -v flock >/dev/null; then
+  exec 9>/tmp/fairshare-e2e.lock
+  flock 9
+fi
 CONTAINER=fairshare-audit-pg
 
 export DATABASE_URL=postgresql://audit:audit@127.0.0.1:55432/audit
@@ -26,7 +32,7 @@ trap 'docker rm -f "$CONTAINER" >/dev/null 2>&1' EXIT
 
 # m11 runs the built app and stops the database, so it goes last
 if [ "$#" -gt 0 ]; then suites=("$@"); else
-  suites=(m10 m9 m8 m7 m6 m5 m4 c3 c4 c5 c6 h1 h3 h4 h5 h7 h8 h9 h10 h11 h12 h13 m11)
+  suites=(devices m10 m9 m8 m7 m6 m5 m4 c3 c4 c5 c6 h1 h3 h4 h5 h7 h8 h9 h10 h11 h12 h13 m11)
 fi
 
 case " ${suites[*]} " in *" m11 "*) (cd "$ROOT" && npx nest build) || exit 1 ;; esac
@@ -46,7 +52,9 @@ for suite in "${suites[@]}"; do
   echo "$suite: $passed passed, $(grep -c '^FAIL' "$output") failed, exit $code"
   if [ "$code" -ne 0 ]; then
     failed=$((failed + 1))
-    grep -E '^FAIL|HARNESS' -A3 "$output"
+    grep -E '^FAIL' "$output"
+    # A suite can crash without any failed check, so always show how it ended
+    tail -n 15 "$output"
   fi
 done
 rm -f "$output"
