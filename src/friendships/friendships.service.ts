@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { Friendships, Prisma } from '@prisma/client';
 
@@ -19,65 +19,61 @@ export class FriendshipsService {
   ) {}
 
   async findFriends(userId: string) {
-    try {
-      const response = await this.prisma.friendships.findMany({
-        where: {
-          status: 'ACCEPTED',
-          OR: [{ senderId: userId }, { receiverId: userId }],
-        },
-        include: {
-          sender: {
-            include: {
-              invitationReceiver: {
-                where: {
-                  senderId: userId,
-                },
-                include: {
-                  group: true,
-                },
+    const response = await this.prisma.friendships.findMany({
+      where: {
+        status: 'ACCEPTED',
+        OR: [{ senderId: userId }, { receiverId: userId }],
+      },
+      include: {
+        sender: {
+          include: {
+            invitationReceiver: {
+              where: {
+                senderId: userId,
               },
-            },
-          },
-          receiver: {
-            include: {
-              invitationReceiver: {
-                where: {
-                  senderId: userId,
-                },
-                include: {
-                  group: true,
-                },
+              include: {
+                group: true,
               },
             },
           },
         },
-      });
+        receiver: {
+          include: {
+            invitationReceiver: {
+              where: {
+                senderId: userId,
+              },
+              include: {
+                group: true,
+              },
+            },
+          },
+        },
+      },
+    });
 
-      const transformedResponse = response.map((friendship) => {
-        const friend =
-          friendship.senderId === userId
-            ? friendship.receiver
-            : friendship.sender;
+    const transformedResponse = response.map((friendship) => {
+      const friend =
+        friendship.senderId === userId
+          ? friendship.receiver
+          : friendship.sender;
 
-        return {
-          id: friend.id,
-          name: friend.name,
-          email: friend.email,
-          requestId: friendship.id,
-          createdAt: friend.createdAt,
-          updatedAt: friend.updatedAt,
-          invitations: friend.invitationReceiver.map((invitation) => ({
-            groupId: invitation.groupId,
-            groupName: invitation.group.name,
-            status: invitation.status,
-          })),
-        };
-      });
+      return {
+        id: friend.id,
+        name: friend.name,
+        email: friend.email,
+        requestId: friendship.id,
+        createdAt: friend.createdAt,
+        updatedAt: friend.updatedAt,
+        invitations: friend.invitationReceiver.map((invitation) => ({
+          groupId: invitation.groupId,
+          groupName: invitation.group.name,
+          status: invitation.status,
+        })),
+      };
+    });
 
-      return transformedResponse;
-    } catch (error) {
-      console.log(error);
-    }
+    return transformedResponse;
   }
 
   async findRequests(userId: string): Promise<Friendships[]> {
@@ -138,6 +134,13 @@ export class FriendshipsService {
 
       return response;
     } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new NotFoundException('User not found');
+      }
+
       // Sending a request twice still isn't an error for the client
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -151,97 +154,87 @@ export class FriendshipsService {
   }
 
   async acceptRequest(userId: string, id: string) {
-    try {
-      const response = await this.prisma.$transaction(async (tx) => {
-        const response = await tx.friendships.update({
-          where: {
-            id,
-            receiverId: userId,
-            status: 'PENDING',
-          },
-          data: {
-            status: 'ACCEPTED',
-          },
-          include: {
-            receiver: true,
-          },
-        });
-
-        await this.activityLogsService.createActivityLog(
-          {
-            action: 'FRIENDSHIP_REQUEST_ACCEPTED',
-            user: { connect: { id: userId } },
-            targetUser: { connect: { id: response.senderId } },
-          },
-          tx,
-        );
-
-        return response;
-      });
-
-      this.sse.emit(
-        [response.senderId],
-        SseEventType.FRIEND_REQUEST_ACCEPTED,
-        `${response.receiver.name} accepted your friend request`,
-      );
-
-      this.push.sendToUsers([response.senderId], {
-        title: 'Friend Request Accepted',
-        body: `${response.receiver.name} is now your friend`,
+    const response = await this.prisma.$transaction(async (tx) => {
+      const response = await tx.friendships.update({
+        where: {
+          id,
+          receiverId: userId,
+          status: 'PENDING',
+        },
         data: {
-          type: SseEventType.FRIEND_REQUEST_ACCEPTED,
+          status: 'ACCEPTED',
+        },
+        include: {
+          receiver: true,
         },
       });
 
+      await this.activityLogsService.createActivityLog(
+        {
+          action: 'FRIENDSHIP_REQUEST_ACCEPTED',
+          user: { connect: { id: userId } },
+          targetUser: { connect: { id: response.senderId } },
+        },
+        tx,
+      );
+
       return response;
-    } catch (error) {
-      console.log(error);
-      throw new InternalServerErrorException();
-    }
+    });
+
+    this.sse.emit(
+      [response.senderId],
+      SseEventType.FRIEND_REQUEST_ACCEPTED,
+      `${response.receiver.name} accepted your friend request`,
+    );
+
+    this.push.sendToUsers([response.senderId], {
+      title: 'Friend Request Accepted',
+      body: `${response.receiver.name} is now your friend`,
+      data: {
+        type: SseEventType.FRIEND_REQUEST_ACCEPTED,
+      },
+    });
+
+    return response;
   }
 
   async rejectRequest(userId: string, id: string) {
-    try {
-      const response = await this.prisma.$transaction(async (tx) => {
-        const response = await tx.friendships.delete({
-          where: {
-            id,
-            receiverId: userId,
-            status: 'PENDING',
-          },
-          include: {
-            receiver: true,
-          },
-        });
-
-        await this.activityLogsService.createActivityLog(
-          {
-            action: 'FRIENDSHIP_REQUEST_REJECTED',
-            user: { connect: { id: userId } },
-            targetUser: { connect: { id: response.senderId } },
-          },
-          tx,
-        );
-
-        return response;
+    const response = await this.prisma.$transaction(async (tx) => {
+      const response = await tx.friendships.delete({
+        where: {
+          id,
+          receiverId: userId,
+          status: 'PENDING',
+        },
+        include: {
+          receiver: true,
+        },
       });
 
-      this.sse.emit(
-        [response.senderId],
-        SseEventType.FRIEND_REQUEST_REJECTED,
-        `${response.receiver.name} rejected your friend request`,
+      await this.activityLogsService.createActivityLog(
+        {
+          action: 'FRIENDSHIP_REQUEST_REJECTED',
+          user: { connect: { id: userId } },
+          targetUser: { connect: { id: response.senderId } },
+        },
+        tx,
       );
 
-      this.push.sendToUsers([response.senderId], {
-        title: 'Friend Request Rejected',
-        body: `${response.receiver.name} rejected your friend request`,
-      });
-
       return response;
-    } catch (error) {
-      console.log(error);
-      throw new InternalServerErrorException();
-    }
+    });
+
+    this.sse.emit(
+      [response.senderId],
+      SseEventType.FRIEND_REQUEST_REJECTED,
+      `${response.receiver.name} rejected your friend request`,
+    );
+
+    this.push.sendToUsers([response.senderId], {
+      title: 'Friend Request Rejected',
+      body: `${response.receiver.name} rejected your friend request`,
+    });
+
+    return response;
   }
 
   async cancelRequest(userId: string, id: string) {
@@ -268,41 +261,36 @@ export class FriendshipsService {
   }
 
   async unfriend(userId: string, id: string) {
-    try {
-      const { response, eventReceiver } = await this.prisma.$transaction(
-        async (tx) => {
-          const response = await tx.friendships.delete({
-            where: {
-              id,
-              status: 'ACCEPTED',
-              OR: [{ senderId: userId }, { receiverId: userId }],
-            },
-          });
+    const { response, eventReceiver } = await this.prisma.$transaction(
+      async (tx) => {
+        const response = await tx.friendships.delete({
+          where: {
+            id,
+            status: 'ACCEPTED',
+            OR: [{ senderId: userId }, { receiverId: userId }],
+          },
+        });
 
-          const eventReceiver =
-            response.senderId === userId
-              ? response.receiverId
-              : response.senderId;
+        const eventReceiver =
+          response.senderId === userId
+            ? response.receiverId
+            : response.senderId;
 
-          await this.activityLogsService.createActivityLog(
-            {
-              action: 'FRIENDSHIP_REMOVED',
-              user: { connect: { id: userId } },
-              targetUser: { connect: { id: eventReceiver } },
-            },
-            tx,
-          );
+        await this.activityLogsService.createActivityLog(
+          {
+            action: 'FRIENDSHIP_REMOVED',
+            user: { connect: { id: userId } },
+            targetUser: { connect: { id: eventReceiver } },
+          },
+          tx,
+        );
 
-          return { response, eventReceiver };
-        },
-      );
+        return { response, eventReceiver };
+      },
+    );
 
-      this.sse.emit([eventReceiver], SseEventType.FRIEND_REMOVED, '');
+    this.sse.emit([eventReceiver], SseEventType.FRIEND_REMOVED, '');
 
-      return response;
-    } catch (error) {
-      console.log(error);
-      throw new InternalServerErrorException();
-    }
+    return response;
   }
 }

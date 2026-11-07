@@ -150,16 +150,4 @@ export class UsersService {
 
     return updated;
   }
-
-  async findFriendRequests(userId: string) {
-    try {
-      return await this.prisma.friendships.findMany({
-        where: {
-          receiverId: userId,
-        },
-      });
-    } catch (error) {
-      console.log(error);
-    }
-  }
 }

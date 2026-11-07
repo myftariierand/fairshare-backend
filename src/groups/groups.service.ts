@@ -1,10 +1,7 @@
 import {
   ForbiddenException,
-  HttpException,
-  HttpStatus,
   Injectable,
   NotFoundException,
-  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { Prisma, Group } from '@prisma/client';
@@ -53,74 +50,69 @@ export class GroupsService {
   }
 
   async findGroupById(userId: string, groupId: string) {
-    try {
-      const response = await this.prisma.group.findUnique({
-        where: {
-          id: groupId,
-          members: { some: { userId } },
+    const response = await this.prisma.group.findUnique({
+      where: {
+        id: groupId,
+        members: { some: { userId } },
+      },
+      include: {
+        members: {
+          include: { user: true },
         },
-        include: {
-          members: {
-            include: { user: true },
-          },
-          transactions: {
-            include: {
-              splits: {
-                include: { user: { select: { id: true, name: true } } },
-              },
-              paidBy: { select: { id: true, name: true } },
+        transactions: {
+          include: {
+            splits: {
+              include: { user: { select: { id: true, name: true } } },
             },
+            paidBy: { select: { id: true, name: true } },
           },
-          createdBy: true,
         },
+        createdBy: true,
+      },
+    });
+
+    if (response) {
+      const balances = BalanceUtil.calculateGroupBalances(
+        response.transactions,
+      );
+      const settlements = BalanceUtil.simplifyBalances(response.transactions);
+
+      const transactions = response.transactions.map((t) => {
+        const userSplit = t.splits.find((split) => split.userId === userId);
+
+        const balance =
+          t.paidById === userId
+            ? t.splits.reduce(
+                (sum, split) =>
+                  sum + (split.userId !== userId ? split.amount.toNumber() : 0),
+                0,
+              )
+            : -(userSplit?.amount.toNumber() ?? 0);
+
+        return { ...t, balance };
       });
 
-      if (response) {
-        const balances = BalanceUtil.calculateGroupBalances(
-          response.transactions,
-        );
-        const settlements = BalanceUtil.simplifyBalances(response.transactions);
+      const transformedResponse = {
+        ...response,
+        members: response?.members.map(
+          ({ joinedAt, user: { id, email, name } }) => ({
+            id,
+            joinedAt,
+            email,
+            name,
+          }),
+        ),
+        balances,
+        settlements,
+        transactions,
+      };
 
-        const transactions = response.transactions.map((t) => {
-          const userSplit = t.splits.find((split) => split.userId === userId);
-
-          const balance =
-            t.paidById === userId
-              ? t.splits.reduce(
-                  (sum, split) =>
-                    sum +
-                    (split.userId !== userId ? split.amount.toNumber() : 0),
-                  0,
-                )
-              : -(userSplit?.amount.toNumber() ?? 0);
-
-          return { ...t, balance };
-        });
-
-        const transformedResponse = {
-          ...response,
-          members: response?.members.map(
-            ({ joinedAt, user: { id, email, name } }) => ({
-              id,
-              joinedAt,
-              email,
-              name,
-            }),
-          ),
-          balances,
-          settlements,
-          transactions,
-        };
-
-        return transformedResponse;
-      } else {
-        return new ForbiddenException(
-          "This group doesn't exist or you are not a member yet.",
-        );
-      }
-    } catch (error) {
-      throw new InternalServerErrorException(error);
+      return transformedResponse;
     }
+
+    throw new NotFoundException(
+      "This group doesn't exist or you are not a member yet.",
+    );
   }
 
   async create(
@@ -266,7 +258,7 @@ export class GroupsService {
 
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          throw new NotFoundException(error.meta?.cause);
+          throw new NotFoundException('Group not found');
         }
       }
 
@@ -323,13 +315,7 @@ export class GroupsService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2025'
       ) {
-        throw new HttpException(
-          {
-            status: HttpStatus.NOT_FOUND,
-            error: error.meta?.cause,
-          },
-          HttpStatus.NOT_FOUND,
-        );
+        throw new NotFoundException('Group not found');
       }
 
       throw error;
@@ -337,17 +323,13 @@ export class GroupsService {
   }
 
   async findInvites(where: Prisma.GroupInvitationWhereInput) {
-    try {
-      return await this.prisma.groupInvitation.findMany({
-        where: where,
-        include: {
-          group: true,
-          sender: true,
-        },
-      });
-    } catch (error) {
-      console.log(error);
-    }
+    return await this.prisma.groupInvitation.findMany({
+      where: where,
+      include: {
+        group: true,
+        sender: true,
+      },
+    });
   }
 
   async invite(userId: string, groupId: string, receiverId: string) {
@@ -409,6 +391,10 @@ export class GroupsService {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           throw new ForbiddenException('Invitation already sent!');
+        }
+
+        if (error.code === 'P2003') {
+          throw new NotFoundException('User not found');
         }
       }
 
@@ -674,105 +660,100 @@ export class GroupsService {
   }
 
   async removeMember(userId: string, groupId: string, memberId: string) {
-    try {
-      const { member, updatedGroup } =
-        await this.groupDebtService.withGroupLock(groupId, async (tx) => {
-          const group = await tx.group.findUnique({
-            where: { id: groupId },
-            select: { createdById: true },
-          });
+    const { member, updatedGroup } = await this.groupDebtService.withGroupLock(
+      groupId,
+      async (tx) => {
+        const group = await tx.group.findUnique({
+          where: { id: groupId },
+          select: { createdById: true },
+        });
 
-          if (!group || group.createdById !== userId) {
-            throw new ForbiddenException(
-              'You are not the owner of this group.',
-            );
-          }
+        if (!group || group.createdById !== userId) {
+          throw new ForbiddenException('You are not the owner of this group.');
+        }
 
-          if (memberId === group.createdById) {
-            throw new ForbiddenException(
-              'Group admin cannot be removed from the group.',
-            );
-          }
+        if (memberId === group.createdById) {
+          throw new ForbiddenException(
+            'Group admin cannot be removed from the group.',
+          );
+        }
 
-          if (await this.groupDebtService.hasOpenDebts(groupId, memberId, tx)) {
-            throw new ForbiddenException(
-              'This member cannot be removed until all balances are settled.',
-            );
-          }
+        if (await this.groupDebtService.hasOpenDebts(groupId, memberId, tx)) {
+          throw new ForbiddenException(
+            'This member cannot be removed until all balances are settled.',
+          );
+        }
 
-          const member = await tx.groupMember.findUnique({
-            where: {
-              groupId_userId: {
-                userId: memberId,
-                groupId,
-              },
+        const member = await tx.groupMember.findUnique({
+          where: {
+            groupId_userId: {
+              userId: memberId,
+              groupId,
             },
-            include: { user: true },
-          });
+          },
+          include: { user: true },
+        });
 
-          if (!member) {
-            throw new NotFoundException('Member not found in the group.');
-          }
+        if (!member) {
+          throw new NotFoundException('Member not found in the group.');
+        }
 
-          const updatedGroup = await tx.group.update({
-            where: { id: groupId },
-            data: {
-              // A new token, so the removed member can't come back through a saved link
-              inviteToken: randomUUID(),
-              members: {
-                delete: {
-                  groupId_userId: {
-                    userId: memberId,
-                    groupId,
-                  },
+        const updatedGroup = await tx.group.update({
+          where: { id: groupId },
+          data: {
+            // A new token, so the removed member can't come back through a saved link
+            inviteToken: randomUUID(),
+            members: {
+              delete: {
+                groupId_userId: {
+                  userId: memberId,
+                  groupId,
                 },
               },
             },
-            include: { members: { include: { user: true } } },
-          });
-
-          await tx.groupInvitation.deleteMany({
-            where: {
-              receiverId: memberId,
-              groupId: groupId,
-            },
-          });
-
-          await this.activityLogsService.createActivityLog(
-            {
-              action: 'GROUP_MEMBER_REMOVED',
-              snapshot: { group: updatedGroup },
-              user: { connect: { id: userId } },
-              group: { connect: { id: groupId } },
-              targetUser: { connect: { id: memberId } },
-            },
-            tx,
-          );
-
-          return { member, updatedGroup };
+          },
+          include: { members: { include: { user: true } } },
         });
 
-      const membersIds = updatedGroup.members
-        .filter((member) => member.userId !== memberId)
-        .map(({ userId }) => userId);
+        await tx.groupInvitation.deleteMany({
+          where: {
+            receiverId: memberId,
+            groupId: groupId,
+          },
+        });
 
-      this.sse.emit(
-        [memberId],
-        SseEventType.GROUP_MEMBER_REMOVED,
-        `You have been removed from ${updatedGroup.name}`,
-      );
+        await this.activityLogsService.createActivityLog(
+          {
+            action: 'GROUP_MEMBER_REMOVED',
+            snapshot: { group: updatedGroup },
+            user: { connect: { id: userId } },
+            group: { connect: { id: groupId } },
+            targetUser: { connect: { id: memberId } },
+          },
+          tx,
+        );
 
-      this.sse.emit(
-        membersIds,
-        SseEventType.GROUP_MEMBER_REMOVED,
-        `${member.user.name} removed from ${updatedGroup.name}`,
-      );
+        return { member, updatedGroup };
+      },
+    );
 
-      return updatedGroup;
-    } catch (error) {
-      console.log(error);
-      throw error;
-    }
+    const membersIds = updatedGroup.members
+      .filter((member) => member.userId !== memberId)
+      .map(({ userId }) => userId);
+
+    this.sse.emit(
+      [memberId],
+      SseEventType.GROUP_MEMBER_REMOVED,
+      `You have been removed from ${updatedGroup.name}`,
+    );
+
+    this.sse.emit(
+      membersIds,
+      SseEventType.GROUP_MEMBER_REMOVED,
+      `${member.user.name} removed from ${updatedGroup.name}`,
+    );
+
+    return updatedGroup;
   }
 
   async leaveGroup(userId: string, groupId: string): Promise<Group> {

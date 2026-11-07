@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
+
+import { PrismaExceptionFilter } from 'src/prisma-exception.filter';
 
 import { DatabaseModule } from 'src/database/database.module';
 import { SseModule } from 'src/sse/sse.module';
@@ -48,6 +50,7 @@ import { validateEnv } from 'src/env.validation';
     // After AuthGuard, which sets the user id that logged-in requests are counted by
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor },
+    { provide: APP_FILTER, useClass: PrismaExceptionFilter },
   ],
 })
 export class AppModule {}

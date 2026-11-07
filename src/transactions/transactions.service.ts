@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
@@ -73,29 +72,23 @@ export class TransactionsService {
   }
 
   async findTransactionById(userId: string, id: string) {
-    try {
-      const transaction = await this.prisma.transaction.findUnique({
-        where: {
-          id,
-          group: { members: { some: { userId } } },
+    const transaction = await this.prisma.transaction.findUnique({
+      where: {
+        id,
+        group: { members: { some: { userId } } },
+      },
+      include: {
+        paidBy: true,
+        createdBy: true,
+        splits: {
+          include: { user: true },
         },
-        include: {
-          paidBy: true,
-          createdBy: true,
-          splits: {
-            include: { user: true },
-          },
-        },
-      });
+      },
+    });
 
-      if (!transaction) throw new NotFoundException();
+    if (!transaction) throw new NotFoundException();
 
-      return transaction;
-    } catch (error) {
-      throw new InternalServerErrorException('Something Went Wrong', {
-        cause: error,
-      });
-    }
+    return transaction;
   }
 
   async createTransaction(

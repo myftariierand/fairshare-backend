@@ -280,7 +280,7 @@ export class AuthService {
       };
     }>;
 
-    if (!user) return null;
+    if (!user) throw new UnauthorizedException();
 
     const friends = [
       ...user.friendshipsReceiver.filter(
@@ -416,9 +416,16 @@ export class AuthService {
   }
 
   private async verifyResetTokenForUser(token: string) {
-    const decoded = await this.jwtService.verifyAsync(token, {
-      secret: process.env.RESET_PASSWORD_SECRET,
-    });
+    const invalidToken = () =>
+      new ForbiddenException('Invalid or expired token');
+
+    const decoded = await this.jwtService
+      .verifyAsync(token, { secret: process.env.RESET_PASSWORD_SECRET })
+      .catch(() => {
+        throw invalidToken();
+      });
+
+    if (typeof decoded.id !== 'string') throw invalidToken();
 
     const user = await this.usersService.findUnique(
       { id: decoded.id },
@@ -426,7 +433,7 @@ export class AuthService {
     );
 
     if (!user || decoded.pwd !== this.passwordFingerprint(user.password)) {
-      throw new ForbiddenException('Invalid or expired token');
+      throw invalidToken();
     }
 
     return user;
@@ -485,24 +492,20 @@ export class AuthService {
       );
     }
 
-    try {
-      const user = await this.verifyResetTokenForUser(token);
+    const user = await this.verifyResetTokenForUser(token);
 
-      const hashedPwd = await bcrypt.hash(newPassword, 10);
+    const hashedPwd = await bcrypt.hash(newPassword, 10);
 
-      await this.prisma.$transaction(async (tx) => {
-        await tx.user.update({
-          where: { id: user.id },
-          data: { password: hashedPwd },
-        });
-
-        await this.refreshTokens.revokeAll(user.id, undefined, tx);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { password: hashedPwd },
       });
 
-      return { message: 'Password reset successfully' };
-    } catch (error: any) {
-      throw new ForbiddenException('Invalid or expired token');
-    }
+      await this.refreshTokens.revokeAll(user.id, undefined, tx);
+    });
+
+    return { message: 'Password reset successfully' };
   }
 
   async verifyResetToken(token: string) {
@@ -510,8 +513,12 @@ export class AuthService {
       await this.verifyResetTokenForUser(token);
 
       return { valid: true };
-    } catch (error: any) {
-      throw new UnauthorizedException('Invalid or expired token');
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw new UnauthorizedException('Invalid or expired token');
+      }
+
+      throw error;
     }
   }
 
