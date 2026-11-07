@@ -19,6 +19,7 @@ import {
   CreateTaskDto,
   UpdateTaskDto,
   ReorderTasksDto,
+  TaskParamsDto,
 } from 'src/schema/tasks';
 
 @Controller('groups/:groupId/tasks')
@@ -43,8 +44,7 @@ export class TasksController {
   @Patch(':taskId')
   update(
     @UserId() userId,
-    @Param('groupId') groupId: string,
-    @Param('taskId') taskId: string,
+    @Param() { groupId, taskId }: TaskParamsDto,
     @Body() dto: UpdateTaskDto,
   ) {
     return this.tasksService.update(userId, taskId, groupId, dto);
@@ -60,11 +60,7 @@ export class TasksController {
   }
 
   @Delete(':taskId')
-  remove(
-    @UserId() userId,
-    @Param('groupId') groupId: string,
-    @Param('taskId') taskId: string,
-  ) {
+  remove(@UserId() userId, @Param() { groupId, taskId }: TaskParamsDto) {
     return this.tasksService.remove(userId, groupId, taskId);
   }
 }

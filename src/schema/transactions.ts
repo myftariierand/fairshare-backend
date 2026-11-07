@@ -3,11 +3,15 @@ import { createZodDto } from 'nestjs-zod';
 
 import { TransactionCategory } from '@prisma/client';
 
+import { text } from 'src/schema/common';
+
+const DescriptionSchema = text(255, 4);
+
 const CreateTransactionSchema = z.object({
   groupId: z.string().uuid(),
   amount: z.number().positive(),
   category: z.nativeEnum(TransactionCategory),
-  description: z.string().min(4),
+  description: DescriptionSchema,
   paidBy: z.string().uuid(),
   splits: z.array(
     z.object({
@@ -33,7 +37,7 @@ const UpdateTransactionSchema = z.object({
   groupId: z.string().uuid(),
   amount: z.number().positive(),
   category: z.nativeEnum(TransactionCategory),
-  description: z.string().min(4),
+  description: DescriptionSchema,
   paidBy: z.string().uuid(),
   splits: z.array(
     z.object({
@@ -74,7 +78,7 @@ export class GetTransactionByIdParamsDto extends createZodDto(
 const SettleDebtBodySchema = z.object({
   groupId: z.string().uuid(),
   amount: z.number().positive(),
-  description: z.string().min(4),
+  description: DescriptionSchema,
   paidBy: z.string().uuid(),
 });
 

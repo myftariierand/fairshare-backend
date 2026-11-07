@@ -16,9 +16,9 @@ const UserSchema = z.object({
 export class UserDto extends createZodDto(UserSchema) {}
 
 const SearchUsersQuerySchema = z.object({
-  query: z.string(),
-  limit: z.number().optional().default(10),
-  offset: z.number().optional().default(0),
+  query: z.string().max(100),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+  offset: z.coerce.number().int().min(0).max(100_000).default(0),
   groupId: z.string().uuid().optional(),
 });
 

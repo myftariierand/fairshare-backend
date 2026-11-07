@@ -8,11 +8,11 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { BugStatus, Severity } from '@prisma/client';
-
 import { AdminService } from 'src/admin/admin.service';
 import { AdminOnlyGuard } from 'src/admin/role.guard';
 
+import { AdminActivitiesQueryDto, UpdateBugReportDto } from 'src/schema/admin';
+import { IdParamsDto } from 'src/schema/common';
 import { AdminUpdateUserDto } from 'src/schema/user';
 
 @Controller('admin')
@@ -26,7 +26,7 @@ export class AdminController {
   }
 
   @Get('activites')
-  getActivity(@Query() query: { page: number; limit: number }) {
+  getActivity(@Query() query: AdminActivitiesQueryDto) {
     return this.adminService.getActivities(query);
   }
 
@@ -37,14 +37,14 @@ export class AdminController {
 
   @Patch('users/:id')
   updateUser(
-    @Param() { id }: { id: string },
+    @Param() { id }: IdParamsDto,
     @Body() { password }: AdminUpdateUserDto,
   ) {
     return this.adminService.updateUser(id, password);
   }
 
   @Delete('users/:id')
-  deleteUser(@Param() { id }: { id: string }) {
+  deleteUser(@Param() { id }: IdParamsDto) {
     return this.adminService.deleteUser(id);
   }
 
@@ -55,14 +55,14 @@ export class AdminController {
 
   @Patch('bugs/:id')
   updateBugReport(
-    @Param() { id }: { id: string },
-    @Body() { status, severity }: { status: BugStatus; severity: Severity },
+    @Param() { id }: IdParamsDto,
+    @Body() { status, severity }: UpdateBugReportDto,
   ) {
     return this.adminService.updateBugReport(id, status, severity);
   }
 
   @Delete('bugs/:id')
-  deleteBugReports(@Param() { id }: { id: string }) {
+  deleteBugReports(@Param() { id }: IdParamsDto) {
     return this.adminService.deleteBugReport(id);
   }
 }

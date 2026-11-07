@@ -4,6 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { BugStatus, Severity } from '@prisma/client';
 
 import { DatabaseService } from 'src/database/database.service';
+import { AdminActivitiesQuery } from 'src/schema/admin';
 
 @Injectable()
 export class AdminService {
@@ -27,16 +28,7 @@ export class AdminService {
     });
   }
 
-  async getActivities({
-    page: strPage,
-    limit: strLimit,
-  }: {
-    page: number;
-    limit: number;
-  }) {
-    const page = +strPage,
-      limit = +strLimit;
-
+  async getActivities({ page, limit }: AdminActivitiesQuery) {
     const skip = (page - 1) * limit;
 
     const [data, total] = await this.prisma.$transaction([
@@ -93,7 +85,7 @@ export class AdminService {
     return this.prisma.bugReport.findMany({ orderBy: [{ createdAt: 'desc' }] });
   }
 
-  updateBugReport(id: string, status: BugStatus, severity: Severity) {
+  updateBugReport(id: string, status?: BugStatus, severity?: Severity) {
     return this.prisma.bugReport.update({
       where: { id },
       data: { status, severity },

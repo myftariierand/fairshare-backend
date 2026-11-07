@@ -26,7 +26,9 @@ import {
   GroupMemberRemoveParamsDto,
   InviteLinkParamsDto,
   JoinGroupParamsDto,
+  LeaveGroupParamsDto,
 } from 'src/schema/group';
+import { IdParamsDto } from 'src/schema/common';
 
 import { UserId } from 'src/users/user.decorator';
 
@@ -48,7 +50,7 @@ export class GroupsController {
   }
 
   @Get(':id')
-  async getGroup(@UserId() userId, @Param() { id }) {
+  async getGroup(@UserId() userId, @Param() { id }: IdParamsDto) {
     return this.groupsService.findGroupById(userId, id);
   }
 
@@ -135,7 +137,7 @@ export class GroupsController {
   }
 
   @Delete(':groupId/leave')
-  leaveGroup(@UserId() userId, @Param('groupId') groupId) {
+  leaveGroup(@UserId() userId, @Param() { groupId }: LeaveGroupParamsDto) {
     return this.groupsService.leaveGroup(userId, groupId);
   }
 }

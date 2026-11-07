@@ -25,6 +25,7 @@ import {
   ResetPasswordDto,
   UpdateProfileDto,
   VerifyOtpDtoClass,
+  VerifyResetTokenQueryDto,
   RequestOtpDtoClass,
 } from 'src/auth/schema';
 import { User } from '@prisma/client';
@@ -134,7 +135,7 @@ export class AuthController {
   @Public()
   @ThrottleByClient(20)
   @Get('verify-reset-token')
-  async verifyResetToken(@Query() { token }: { token: string }) {
+  async verifyResetToken(@Query() { token }: VerifyResetTokenQueryDto) {
     return this.authService.verifyResetToken(token);
   }
 

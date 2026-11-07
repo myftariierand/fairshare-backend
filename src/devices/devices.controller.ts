@@ -4,12 +4,14 @@ import { DatabaseService } from 'src/database/database.service';
 
 import { UserId } from 'src/users/user.decorator';
 
+import { RegisterDeviceDto } from 'src/schema/devices';
+
 @Controller('devices')
 export class DevicesController {
   constructor(private prisma: DatabaseService) {}
 
   @Post()
-  register(@UserId() userId, @Body() dto: { token: string; platform: string }) {
+  register(@UserId() userId, @Body() dto: RegisterDeviceDto) {
     // upsert by token: if the device switches accounts, the token moves to the new user
     return this.prisma.deviceToken.upsert({
       where: { token: dto.token },

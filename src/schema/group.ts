@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
+import { CurrencySchema, NameSchema } from 'src/schema/common';
+
 const CreateGroupSchema = z.object({
-  name: z.string(),
-  currency: z.string(),
+  name: NameSchema,
+  currency: CurrencySchema,
   // User ids to invite. Multipart gives a single value as a string, several as an array
   invite: z
     .union([z.string().uuid(), z.string().uuid().array()])
@@ -18,8 +20,8 @@ const UpdateParamsSchema = z.object({ groupId: z.string().uuid() });
 export class UpdateParamsDto extends createZodDto(UpdateParamsSchema) {}
 
 const UpdateGroupSchema = z.object({
-  name: z.string(),
-  currency: z.string(),
+  name: NameSchema,
+  currency: CurrencySchema,
   // Sent as text because the update request is multipart
   removeCover: z
     .enum(['true', 'false'])
@@ -80,6 +82,12 @@ const InviteLinkParamsSchema = z.object({
 });
 
 export class InviteLinkParamsDto extends createZodDto(InviteLinkParamsSchema) {}
+
+const LeaveGroupParamsSchema = z.object({
+  groupId: z.string().uuid(),
+});
+
+export class LeaveGroupParamsDto extends createZodDto(LeaveGroupParamsSchema) {}
 
 const GroupMemberRemoveSchmea = z.object({
   groupId: z.string().uuid(),
