@@ -1,12 +1,20 @@
 import * as crypto from 'crypto';
 
+// Keyed, because with only a million possible codes anyone reading the table could otherwise try
+// them all at once
+export const hashOtp = (otp: string) =>
+  crypto
+    .createHmac('sha256', process.env.RESET_PASSWORD_SECRET as string)
+    .update(otp)
+    .digest('hex');
+
 export const generateOtp = (): {
   otp: string;
   hashedOtp: string;
   expiresAt: Date;
 } => {
-  const otp = crypto.randomInt(100000, 999999).toString();
-  const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+  const otp = crypto.randomInt(100000, 1000000).toString();
+  const hashedOtp = hashOtp(otp);
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // OTP expires in 5 minutes
 
   return { otp, hashedOtp, expiresAt };

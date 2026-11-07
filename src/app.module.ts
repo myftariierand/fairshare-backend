@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
+import { ZodValidationPipe } from 'nestjs-zod';
 
 import { PrismaExceptionFilter } from 'src/prisma-exception.filter';
 import { HealthController } from 'src/health.controller';
@@ -20,7 +20,7 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { BugReportsModule } from 'src/bug-reports/bug-reports.module';
 import { AdminModule } from 'src/admin/admin.module';
 import { TasksModule } from 'src/tasks/tasks.module';
-import { DevicesModule } from 'src/devices/devices.modules';
+import { DevicesModule } from 'src/devices/devices.module';
 
 import { AuthGuard } from 'src/auth/auth.guard';
 import { throttlerOptions } from 'src/throttling';
@@ -51,7 +51,6 @@ import { validateEnv } from 'src/env.validation';
     { provide: APP_GUARD, useClass: AuthGuard },
     // After AuthGuard, which sets the user id that logged-in requests are counted by
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor },
     { provide: APP_FILTER, useClass: PrismaExceptionFilter },
   ],
 })

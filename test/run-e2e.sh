@@ -32,7 +32,7 @@ trap 'docker rm -f "$CONTAINER" >/dev/null 2>&1' EXIT
 
 # m11 runs the built app and stops the database, so it goes last
 if [ "$#" -gt 0 ]; then suites=("$@"); else
-  suites=(devices m10 m9 m8 m7 m6 m5 m4 c3 c4 c5 c6 h1 h3 h4 h5 h7 h8 h9 h10 h11 h12 h13 m11)
+  suites=(low devices m10 m9 m8 m7 m6 m5 m4 c3 c4 c5 c6 h1 h3 h4 h5 h7 h8 h9 h10 h11 h12 h13 m11)
 fi
 
 case " ${suites[*]} " in *" m11 "*) (cd "$ROOT" && npx nest build) || exit 1 ;; esac

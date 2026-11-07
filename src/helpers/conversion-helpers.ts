@@ -51,22 +51,3 @@ export function toMinorUnit(amount: number, currency: string): number {
   const decimals = decimalsOf(currency);
   return Math.round(amount * Math.pow(10, decimals));
 }
-
-export function fromMinorUnit(amount: number, currency: string): string {
-  const decimals = decimalsOf(currency);
-  return (amount / Math.pow(10, decimals)).toFixed(decimals);
-}
-
-export function splitAmount(
-  amount: number,
-  userIds: string[],
-): { userId: string; amount: number }[] {
-  const n = userIds.length;
-  const base = Math.floor(amount / n);
-  const remainder = amount % n;
-
-  return userIds.map((id, i) => ({
-    userId: id,
-    amount: base + (i < remainder ? 1 : 0), // distribute remainder
-  }));
-}

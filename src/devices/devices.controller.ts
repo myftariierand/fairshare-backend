@@ -14,7 +14,7 @@ export class DevicesController {
   constructor(private prisma: DatabaseService) {}
 
   @Post()
-  async register(@UserId() userId, @Body() dto: RegisterDeviceDto) {
+  async register(@UserId() userId: string, @Body() dto: RegisterDeviceDto) {
     await this.prisma.$transaction(async (tx) => {
       // upsert by token: if the device switches accounts, the token moves to the new user
       await tx.deviceToken.upsert({
@@ -39,7 +39,7 @@ export class DevicesController {
   }
 
   @Delete(':token')
-  unregister(@UserId() userId, @Param('token') token: string) {
+  unregister(@UserId() userId: string, @Param('token') token: string) {
     return this.prisma.deviceToken.deleteMany({
       where: { token, userId },
     });

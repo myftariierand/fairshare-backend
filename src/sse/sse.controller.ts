@@ -13,7 +13,7 @@ export class SseController {
   constructor(private sseService: SseService) {}
 
   @Post('ticket')
-  createTicket(@UserId() userId) {
+  createTicket(@UserId() userId: string) {
     return { ticket: this.sseService.createTicket(userId) };
   }
 
@@ -25,7 +25,7 @@ export class SseController {
   @Header('Content-Type', 'text/event-stream')
   @Header('Cache-Control', 'no-cache')
   @Header('Connection', 'keep-alive')
-  subscribe(@UserId() userId): Observable<MessageEvent> {
+  subscribe(@UserId() userId: string): Observable<MessageEvent> {
     return this.sseService.subscribe(userId);
   }
 }

@@ -40,32 +40,44 @@ export class GroupsController {
   constructor(private groupsService: GroupsService) {}
 
   @Get()
-  async getGroups(@UserId() userId) {
+  async getGroups(@UserId() userId: string) {
     return this.groupsService.findMany(userId);
   }
 
   @Get('invites')
-  getInvites(@UserId() userId, @Query() { status }: InvitationsQueryDto) {
+  getInvites(
+    @UserId() userId: string,
+    @Query() { status }: InvitationsQueryDto,
+  ) {
     return this.groupsService.findInvites({ receiverId: userId, status });
   }
 
   @Get(':id')
-  async getGroup(@UserId() userId, @Param() { id }: IdParamsDto) {
+  async getGroup(@UserId() userId: string, @Param() { id }: IdParamsDto) {
     return this.groupsService.findGroupById(userId, id);
   }
 
   @Get(':groupId/invite-link')
-  getInviteLink(@UserId() userId, @Param() { groupId }: InviteLinkParamsDto) {
+  getInviteLink(
+    @UserId() userId: string,
+    @Param() { groupId }: InviteLinkParamsDto,
+  ) {
     return this.groupsService.getInviteLink(userId, groupId);
   }
 
   @Post(':groupId/invite-link/reset')
-  resetInviteLink(@UserId() userId, @Param() { groupId }: InviteLinkParamsDto) {
+  resetInviteLink(
+    @UserId() userId: string,
+    @Param() { groupId }: InviteLinkParamsDto,
+  ) {
     return this.groupsService.resetInviteLink(userId, groupId);
   }
 
   @Post('join/:token')
-  async joinGroup(@UserId() userId, @Param() { token }: JoinGroupParamsDto) {
+  async joinGroup(
+    @UserId() userId: string,
+    @Param() { token }: JoinGroupParamsDto,
+  ) {
     return this.groupsService.joinGroup(userId, token);
   }
 
@@ -73,7 +85,7 @@ export class GroupsController {
   @Post()
   @UseInterceptors(FileInterceptor('cover', coverUploadOptions))
   createGroup(
-    @UserId() userId,
+    @UserId() userId: string,
     @Body() { invite, ...createGroupDto }: CreateGroupDto,
     @UploadedFile() cover: Express.Multer.File,
   ) {
@@ -84,7 +96,7 @@ export class GroupsController {
   @Patch(':groupId')
   @UseInterceptors(FileInterceptor('cover', coverUploadOptions))
   updateGroup(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { groupId }: UpdateParamsDto,
     @Body() { removeCover, ...updateGroupDto }: UpdateGroupDto,
     @UploadedFile() cover: Express.Multer.File,
@@ -99,14 +111,17 @@ export class GroupsController {
   }
 
   @Delete(':groupId')
-  deleteGroup(@UserId() userId, @Param() { groupId }: DeleteGroupParamsDto) {
+  deleteGroup(
+    @UserId() userId: string,
+    @Param() { groupId }: DeleteGroupParamsDto,
+  ) {
     return this.groupsService.delete(userId, groupId);
   }
 
   @ThrottleByClient(30)
   @Post(':groupId/invite/:receiverId')
   sendInvite(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { groupId, receiverId }: GroupInviteParamsDto,
   ) {
     return this.groupsService.invite(userId, groupId, receiverId);
@@ -114,7 +129,7 @@ export class GroupsController {
 
   @Post(':groupId/invite/:inviteId/accept')
   acceptInvite(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { groupId, inviteId }: AcceptGroupInviteParamsDto,
   ) {
     return this.groupsService.acceptInvitation(userId, groupId, inviteId);
@@ -122,7 +137,7 @@ export class GroupsController {
 
   @Post('invite/:inviteId/reject')
   rejectInvite(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { inviteId }: RejectGroupInviteParamsDto,
   ) {
     return this.groupsService.rejectInvitation(userId, inviteId);
@@ -130,14 +145,17 @@ export class GroupsController {
 
   @Delete(':groupId/remove/:memberId')
   removeMember(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { groupId, memberId }: GroupMemberRemoveParamsDto,
   ) {
     return this.groupsService.removeMember(userId, groupId, memberId);
   }
 
   @Delete(':groupId/leave')
-  leaveGroup(@UserId() userId, @Param() { groupId }: LeaveGroupParamsDto) {
+  leaveGroup(
+    @UserId() userId: string,
+    @Param() { groupId }: LeaveGroupParamsDto,
+  ) {
     return this.groupsService.leaveGroup(userId, groupId);
   }
 }

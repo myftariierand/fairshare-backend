@@ -21,25 +21,25 @@ export class BugReportsService {
       data,
     });
 
-    const html = renderTemplate('bug-report-notification', {
-      title: bug.title,
-      description: bug.description,
-      severity: bug.severity,
-      name: bug.name,
-      email: bug.email,
-      device: bug.device,
-      createdAt: bug.createdAt.toISOString(),
-    });
+    const to = process.env.NOTIFICATION_EMAIL;
 
-    this.emailService
-      .sendEmail({
-        to: 'myftarierand@gmail.com',
-        subject: `New Bug Report - ${bug.severity}`,
-        html,
-      })
-      .catch((err) => {
-        this.logger.error('Failed to send bug report email', err);
+    if (to) {
+      const html = renderTemplate('bug-report-notification', {
+        title: bug.title,
+        description: bug.description,
+        severity: bug.severity,
+        name: bug.name,
+        email: bug.email,
+        device: bug.device,
+        createdAt: bug.createdAt.toISOString(),
       });
+
+      this.emailService
+        .sendEmail({ to, subject: `New Bug Report - ${bug.severity}`, html })
+        .catch((err) => {
+          this.logger.error('Failed to send bug report email', err);
+        });
+    }
 
     return bug;
   }

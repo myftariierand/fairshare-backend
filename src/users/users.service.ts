@@ -103,22 +103,22 @@ export class UsersService {
 
     const user = await this.prisma.user.create({ data });
 
-    const html = renderTemplate('new-user-registered', {
-      name: user.name,
-      email: user.email,
-      registeredAt: user.createdAt,
-      provider: user.provider,
-    });
+    const to = process.env.NOTIFICATION_EMAIL;
 
-    this.emailService
-      .sendEmail({
-        to: 'myftarierand@gmail.com',
-        subject: `New user registered`,
-        html,
-      })
-      .catch((err) => {
-        this.logger?.error('Failed to send new-user notification email', err);
+    if (to) {
+      const html = renderTemplate('new-user-registered', {
+        name: user.name,
+        email: user.email,
+        registeredAt: user.createdAt,
+        provider: user.provider,
       });
+
+      this.emailService
+        .sendEmail({ to, subject: `New user registered`, html })
+        .catch((err) => {
+          this.logger?.error('Failed to send new-user notification email', err);
+        });
+    }
 
     return user;
   }

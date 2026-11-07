@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { DevicesModule } from 'src/devices/devices.modules';
+import { DevicesModule } from 'src/devices/devices.module';
 
 import { FriendshipsController } from 'src/friendships/friendships.controller';
 import { FriendshipsService } from 'src/friendships/friendships.service';

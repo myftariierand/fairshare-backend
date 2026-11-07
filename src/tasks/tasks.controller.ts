@@ -35,7 +35,7 @@ export class TasksController {
   @Post()
   create(
     @Param('groupId') groupId: string,
-    @UserId() userId,
+    @UserId() userId: string,
     @Body() dto: CreateTaskDto,
   ) {
     return this.tasksService.create(groupId, userId, dto.text);
@@ -43,7 +43,7 @@ export class TasksController {
 
   @Patch(':taskId')
   update(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { groupId, taskId }: TaskParamsDto,
     @Body() dto: UpdateTaskDto,
   ) {
@@ -52,7 +52,7 @@ export class TasksController {
 
   @Put('reorder')
   reorder(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param('groupId') groupId: string,
     @Body() dto: ReorderTasksDto,
   ) {
@@ -60,7 +60,10 @@ export class TasksController {
   }
 
   @Delete(':taskId')
-  remove(@UserId() userId, @Param() { groupId, taskId }: TaskParamsDto) {
+  remove(
+    @UserId() userId: string,
+    @Param() { groupId, taskId }: TaskParamsDto,
+  ) {
     return this.tasksService.remove(userId, groupId, taskId);
   }
 }

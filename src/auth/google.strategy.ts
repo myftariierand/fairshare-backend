@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy } from 'passport-google-oauth20';
+import { Strategy, StrategyOptions } from 'passport-google-oauth20';
 import { UsersService } from 'src/users/users.service';
 import { OAuthCookieStateStore } from './oauth-state.store';
 
@@ -8,12 +8,12 @@ import { OAuthCookieStateStore } from './oauth-state.store';
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor(private readonly usersService: UsersService) {
     super({
-      clientID: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL,
+      clientID: process.env.GOOGLE_CLIENT_ID as string,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+      callbackURL: process.env.GOOGLE_CALLBACK_URL as string,
       scope: ['email', 'profile'],
-      passReqToCallback: false,
-      store: new OAuthCookieStateStore(),
+      // The types only describe a store that takes metadata, but passport also accepts this shape
+      store: new OAuthCookieStateStore() as unknown as StrategyOptions['store'],
     });
   }
 

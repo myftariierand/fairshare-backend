@@ -192,14 +192,14 @@ const check = (name: string, got: any, want: any) => {
   check('  five rows', await countTx(), 5);
   check('same key in another group is refused', (await addTx(a, g2, { splits, idempotencyKey: key })).status, 409);
   const failedKey = randomUUID();
-  check('a refused expense', (await addTx(a, g, { amount: 99, splits, idempotencyKey: failedKey })).status, 403);
+  check('a refused expense', (await addTx(a, g, { amount: 99, splits, idempotencyKey: failedKey })).status, 400);
   check('  doesn\'t use up its key', (await addTx(a, g, { splits, idempotencyKey: failedKey })).status, 201);
   check('outsider replaying a key', (await addTx(c, g, { splits, paidBy: a.id, idempotencyKey: key })).status, 403);
   check('key too short', (await addTx(a, g, { splits, idempotencyKey: 'abc' })).status, 400);
   check('key too long', (await addTx(a, g, { splits, idempotencyKey: 'x'.repeat(65) })).status, 400);
 
   console.log('--- empty splits');
-  check('refused', (await addTx(a, g, { splits: [] })).status, 403);
+  check('refused', (await addTx(a, g, { splits: [] })).status, 400);
 
   await app.close();
   console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED');

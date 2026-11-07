@@ -26,7 +26,8 @@ export class AdminController {
     return this.adminService.getGroups();
   }
 
-  @Get('activites')
+  // The misspelling stays until no admin app still calls it
+  @Get(['activities', 'activites'])
   getActivity(@Query() query: AdminActivitiesQueryDto) {
     return this.adminService.getActivities(query);
   }
@@ -38,7 +39,7 @@ export class AdminController {
 
   @Patch('users/:id')
   updateUser(
-    @UserId() adminId,
+    @UserId() adminId: string,
     @Param() { id }: IdParamsDto,
     @Body() { password }: AdminUpdateUserDto,
   ) {
@@ -46,7 +47,7 @@ export class AdminController {
   }
 
   @Delete('users/:id')
-  deleteUser(@UserId() adminId, @Param() { id }: IdParamsDto) {
+  deleteUser(@UserId() adminId: string, @Param() { id }: IdParamsDto) {
     return this.adminService.deleteUser(adminId, id);
   }
 

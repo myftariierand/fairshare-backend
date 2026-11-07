@@ -89,11 +89,11 @@ const LeaveGroupParamsSchema = z.object({
 
 export class LeaveGroupParamsDto extends createZodDto(LeaveGroupParamsSchema) {}
 
-const GroupMemberRemoveSchmea = z.object({
+const GroupMemberRemoveSchema = z.object({
   groupId: z.string().uuid(),
   memberId: z.string().uuid(),
 });
 
 export class GroupMemberRemoveParamsDto extends createZodDto(
-  GroupMemberRemoveSchmea,
+  GroupMemberRemoveSchema,
 ) {}

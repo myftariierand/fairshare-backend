@@ -4,7 +4,7 @@ const required = z.string().min(1, 'is missing or empty');
 
 const secret = required.min(32, 'must be at least 32 characters');
 
-// Optional ones aren't listed: PORT has a default, ADMIN_ORIGIN and MOBILE_ORIGIN only add to CORS,
+// Optional ones aren't listed: NOTIFICATION_EMAIL just turns off owner emails when unset, PORT has a default, ADMIN_ORIGIN and MOBILE_ORIGIN only add to CORS,
 // and GOOGLE_WEB_CLIENT_ID is for a mobile app using a different Google client from the backend
 const EnvSchema = z.object({
   DATABASE_URL: required,

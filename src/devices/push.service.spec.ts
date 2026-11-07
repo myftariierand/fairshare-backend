@@ -6,7 +6,9 @@ import { PushService } from './push.service';
 // The real package is ESM only, which Jest can't load
 jest.mock('expo-server-sdk', () => ({
   Expo: class {
-    static isExpoPushToken = () => true;
+    static isExpoPushToken(): boolean {
+      return true;
+    }
     chunkPushNotifications(messages: unknown[]) {
       return messages.length ? [messages] : [];
     }

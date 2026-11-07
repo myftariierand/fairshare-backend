@@ -4,7 +4,7 @@ import { TransactionsService } from './transactions.service';
 import { TransactionsController } from './transactions.controller';
 
 import { GroupDebtModule } from 'src/group-debt/groupDebt.module';
-import { DevicesModule } from 'src/devices/devices.modules';
+import { DevicesModule } from 'src/devices/devices.module';
 
 @Module({
   imports: [GroupDebtModule, DevicesModule],

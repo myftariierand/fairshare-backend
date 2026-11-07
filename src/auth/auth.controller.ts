@@ -100,14 +100,14 @@ export class AuthController {
   }
 
   @Get('profile')
-  getProfile(@Req() req) {
+  getProfile(@Req() req: { id: string }) {
     return this.authService.getProfile(req.id);
   }
 
   @ThrottleByClient(10)
   @Post('change-password')
   async changePassword(
-    @Req() req,
+    @Req() req: { id: string },
     @Cookies('jwt') cookieToken: string,
     @Body()
     { password, newPassword, confirmPassword, refreshToken }: ChangePasswordDto,
@@ -125,7 +125,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('delete-account')
   deleteAccount(
-    @Req() req,
+    @Req() req: { id: string },
     @Body() { password }: DeleteAccountDto,
     @Res({ passthrough: true }) response: Response,
   ) {
@@ -158,7 +158,7 @@ export class AuthController {
 
   @Post('update-profile')
   async updateProfile(
-    @UserId() userId,
+    @UserId() userId: string,
     @Body() body: UpdateProfileDto,
   ): Promise<User> {
     return this.authService.updateProfile(userId, body);
@@ -174,7 +174,7 @@ export class AuthController {
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   @Public()
-  async googleAuthCallback(@Req() req, @Res() res: Response) {
+  async googleAuthCallback(@Req() req: { user: User }, @Res() res: Response) {
     await this.authService.googleLogin(req.user, res);
   }
 

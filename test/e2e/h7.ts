@@ -100,7 +100,7 @@ const check = (name: string, got: any, want: any) => {
   console.log('--- bad edits change nothing');
   T = await add();
   const before = await splits(T);
-  check('splits do not add up', (await edit(T, creator, { amount: 31 })).status, 403);
+  check('splits do not add up', (await edit(T, creator, { amount: 31 })).status, 400);
   check('  untouched', await splits(T), before);
   check('duplicate person', (await edit(T, creator, { amount: 20, splits: [{ userId: debtor.id, amount: 10 }, { userId: debtor.id, amount: 10 }] })).status, 400);
   check('  untouched', await splits(T), before);

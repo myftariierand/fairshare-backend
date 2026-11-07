@@ -18,19 +18,19 @@ export class FriendshipsController {
   constructor(private friendshipsService: FriendshipsService) {}
 
   @Get()
-  getFriends(@UserId() userId) {
+  getFriends(@UserId() userId: string) {
     return this.friendshipsService.findFriends(userId);
   }
 
   @Get('requests')
-  getFriendRequests(@UserId() userId) {
+  getFriendRequests(@UserId() userId: string) {
     return this.friendshipsService.findRequests(userId);
   }
 
   @ThrottleByClient(20)
   @Post('requests/:receiverId')
   sendFriendRequest(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { receiverId }: SendFriendRequestParamsDto,
   ) {
     return this.friendshipsService.sendRequest(userId, receiverId);
@@ -38,7 +38,7 @@ export class FriendshipsController {
 
   @Patch('requests/:id/accept')
   acceptFriendRequest(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { id }: AcceptFriendRequestParamsDto,
   ) {
     return this.friendshipsService.acceptRequest(userId, id);
@@ -46,7 +46,7 @@ export class FriendshipsController {
 
   @Patch('requests/:id/reject')
   rejectFriendRequest(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { id }: RejectFriendRequestParamsDto,
   ) {
     return this.friendshipsService.rejectRequest(userId, id);
@@ -54,7 +54,7 @@ export class FriendshipsController {
 
   @Delete('requests/:id/cancel')
   cancelFriendRequest(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { id }: CancelFriendRequestParamsDto,
   ) {
     return this.friendshipsService.cancelRequest(userId, id);
@@ -62,7 +62,7 @@ export class FriendshipsController {
 
   @Delete('requests/:id/unfriend')
   deleteFriend(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { id }: CancelFriendRequestParamsDto,
   ) {
     return this.friendshipsService.unfriend(userId, id);

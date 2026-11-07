@@ -146,7 +146,7 @@ export class TransactionsService {
         );
 
         if (splitsTotal !== unitAmount)
-          throw new ForbiddenException(
+          throw new BadRequestException(
             'The sum of the splits must be equal to total amount',
           );
 
@@ -229,7 +229,7 @@ export class TransactionsService {
     paidBy: string,
     splits: { userId: string; amount: number }[],
   ) {
-    const { foundGroup, groupMemebersIds, transaction } =
+    const { foundGroup, groupMembersIds, transaction } =
       await this.groupDebtService.withGroupLock(groupId, async (tx) => {
         const foundGroup = await tx.group.findUnique({
           where: { id: groupId },
@@ -237,10 +237,10 @@ export class TransactionsService {
         });
         if (!foundGroup) throw new NotFoundException('Group not found');
 
-        const groupMemebersIds = foundGroup.members.map(
+        const groupMembersIds = foundGroup.members.map(
           (member) => member.userId,
         );
-        if (!groupMemebersIds.includes(userId))
+        if (!groupMembersIds.includes(userId))
           throw new ForbiddenException('You are not a member of this group');
 
         // The membership check above is only about this group, so the expense must belong to it.
@@ -254,13 +254,13 @@ export class TransactionsService {
         this.assertCanManage(existing, foundGroup.createdById, userId);
 
         // Someone who has left can stay on an old expense, but can't be added to one
-        if (paidBy !== existing.paidById && !groupMemebersIds.includes(paidBy))
+        if (paidBy !== existing.paidById && !groupMembersIds.includes(paidBy))
           throw new ForbiddenException(
             'The payer must be a member of the group',
           );
 
         const allowedInSplits = new Set([
-          ...groupMemebersIds,
+          ...groupMembersIds,
           ...existing.splits.map((split) => split.userId),
         ]);
         if (!splits.every((split) => allowedInSplits.has(split.userId)))
@@ -279,7 +279,7 @@ export class TransactionsService {
         );
 
         if (splitsTotal !== unitAmount)
-          throw new ForbiddenException(
+          throw new BadRequestException(
             'The sum of the splits must be equal to total amount',
           );
 
@@ -312,10 +312,10 @@ export class TransactionsService {
           tx,
         );
 
-        return { foundGroup, groupMemebersIds, transaction };
+        return { foundGroup, groupMembersIds, transaction };
       });
 
-    const receivers = groupMemebersIds.filter((id) => id !== userId);
+    const receivers = groupMembersIds.filter((id) => id !== userId);
     const updater = foundGroup.members.find(
       (member) => member.userId === userId,
     );

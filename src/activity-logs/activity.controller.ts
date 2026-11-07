@@ -11,7 +11,7 @@ export class ActivityLogsController {
 
   @Get()
   async getActivityLogs(
-    @UserId() userId,
+    @UserId() userId: string,
     @Query() params: GetActivityQueryDto,
   ) {
     return this.activityService.getActivityLogs(userId, params);

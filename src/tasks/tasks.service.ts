@@ -41,19 +41,11 @@ export class TasksService {
       include: { createdBy: { select: { id: true, name: true } } },
     });
 
-    const group = await this.prisma.group.findFirstOrThrow({
-      where: { id: groupId },
-      include: { members: true },
-    });
-
-    const membersIds = group.members
-      .map(({ userId }) => userId)
-      .filter((id) => id !== userId);
-
-    this.sse.emit(
-      membersIds,
+    await this.notifyMembers(
+      userId,
+      groupId,
       SseEventType.CHECKLIST_ITEM_ADDED,
-      `New item added in ${group.name}`,
+      (name) => `New item added in ${name}`,
     );
 
     return task;
@@ -72,19 +64,12 @@ export class TasksService {
       data,
     });
 
-    const group = await this.prisma.group.findFirstOrThrow({
-      where: { id: groupId },
-      include: { members: true },
-    });
-
-    const membersIds = group.members
-      .map(({ userId }) => userId)
-      .filter((id) => id !== userId);
-
-    this.sse.emit(
-      membersIds,
+    await this.notifyMembers(
+      userId,
+      groupId,
       SseEventType.CHECKLIST_ITEM_UPDATED,
-      `Item marked as ${data.done ? '"Done"' : '"Undone"'} in ${group.name}`,
+      (name) =>
+        `Item marked as ${data.done ? '"Done"' : '"Undone"'} in ${name}`,
     );
 
     return task;
@@ -97,19 +82,11 @@ export class TasksService {
       where: { id: taskId, groupId },
     });
 
-    const group = await this.prisma.group.findFirstOrThrow({
-      where: { id: groupId },
-      include: { members: true },
-    });
-
-    const membersIds = group.members
-      .map(({ userId }) => userId)
-      .filter((id) => id !== userId);
-
-    this.sse.emit(
-      membersIds,
+    await this.notifyMembers(
+      userId,
+      groupId,
       SseEventType.CHECKLIST_ITEM_DELETED,
-      `Item removed from ${group.name}`,
+      (name) => `Item removed from ${name}`,
     );
 
     return task;
@@ -136,6 +113,21 @@ export class TasksService {
       throw error;
     }
 
+    await this.notifyMembers(
+      userId,
+      groupId,
+      SseEventType.CHECKLIST_ITEM_REORDERED,
+      (name) => `Item reordered in ${name}`,
+    );
+    return this.findAllForGroup(groupId);
+  }
+
+  private async notifyMembers(
+    userId: string,
+    groupId: string,
+    type: SseEventType,
+    message: (groupName: string) => string,
+  ) {
     const group = await this.prisma.group.findFirstOrThrow({
       where: { id: groupId },
       include: { members: true },
@@ -144,12 +136,8 @@ export class TasksService {
     const membersIds = group.members
       .map(({ userId }) => userId)
       .filter((id) => id !== userId);
-    this.sse.emit(
-      membersIds,
-      SseEventType.CHECKLIST_ITEM_REORDERED,
-      `Item reordered in ${group.name}`,
-    );
-    return this.findAllForGroup(groupId);
+
+    this.sse.emit(membersIds, type, message(group.name));
   }
 
   private async assertBelongsToGroup(taskId: string, groupId: string) {

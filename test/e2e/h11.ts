@@ -10,7 +10,7 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
-import { createHash } from 'crypto';
+import { createHmac } from 'crypto';
 import { Expo } from 'expo-server-sdk';
 
 let pushes = 0;
@@ -155,7 +155,7 @@ const check = (name: string, got: any, want: any) => {
   await atomic('update profile', () => request(s).post('/auth/update-profile').set(pw.h).send({ name: 'Changed' }), () => db.user.findUnique({ where: { id: pw.id }, select: { name: true } }));
 
   console.log('--- email verification');
-  const hash = (x: string) => createHash('sha256').update(x).digest('hex');
+  const hash = (x: string) => createHmac('sha256', process.env.RESET_PASSWORD_SECRET!).update(x).digest('hex');
   const setOtp = async (u: any, code: string, attempts = 0) => db.emailVerificationOtp.upsert({ where: { userId: u.id }, create: { userId: u.id, otpHash: hash(code), expiresAt: new Date(Date.now() + 300000), attempts }, update: { otpHash: hash(code), attempts, expiresAt: new Date(Date.now() + 300000) } });
   const verify = (u: any, otp: string) => request(s).post('/auth/verify-email/verify').send({ email: u.email, otp });
   const ov = await mk();

@@ -14,7 +14,7 @@ export class UsersController {
   @ThrottleByClient(30)
   @Get('search')
   async searchUsers(
-    @UserId() userId,
+    @UserId() userId: string,
     @Query() { query, limit, offset, groupId }: SearchUsersQueryDto,
   ) {
     return this.usersService.searchUsers(userId, query, limit, offset, groupId);

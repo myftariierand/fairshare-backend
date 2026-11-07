@@ -3,14 +3,13 @@ import {
   HttpException,
   Injectable,
   UnauthorizedException,
-  NotFoundException,
   ForbiddenException,
   BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, Role, User } from '@prisma/client';
-import { Request, Response } from 'express';
+import { CookieOptions, Request, Response } from 'express';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
@@ -29,6 +28,13 @@ import {
   REFRESH_TOKEN_EXPIRY_MS,
   RefreshTokenService,
 } from 'src/auth/refresh-token.service';
+
+// Shared so clearing the cookie can't miss because its options differ from when it was set
+const REFRESH_COOKIE_OPTIONS: CookieOptions = {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'none',
+};
 
 // Compared against when there's no real password to check. Nothing can match it.
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync(
@@ -81,10 +87,8 @@ export class AuthService {
 
   private setRefreshCookie(response: Response, refreshToken: string) {
     response.cookie('jwt', refreshToken, {
-      httpOnly: true,
-      secure: true,
+      ...REFRESH_COOKIE_OPTIONS,
       maxAge: REFRESH_TOKEN_EXPIRY_MS,
-      sameSite: 'none',
     });
   }
 
@@ -225,11 +229,7 @@ export class AuthService {
 
     await this.accountDeletionService.deleteAccount(userId, userId);
 
-    response.clearCookie('jwt', {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-    });
+    response.clearCookie('jwt', REFRESH_COOKIE_OPTIONS);
 
     return { message: 'Account deleted' };
   }
@@ -251,11 +251,7 @@ export class AuthService {
       });
     }
 
-    response.clearCookie('jwt', {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-    });
+    response.clearCookie('jwt', REFRESH_COOKIE_OPTIONS);
 
     return { message: 'Cookie cleared' };
   }
@@ -599,12 +595,6 @@ export class AuthService {
         role: user.role,
       },
     };
-  }
-
-  async me(userId: string) {
-    const user = await this.usersService.findUnique({ id: userId });
-    if (!user) throw new NotFoundException('User not found');
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
   }
 
   async loginWithGoogleIdToken(idToken: string) {

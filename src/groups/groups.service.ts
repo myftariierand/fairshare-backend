@@ -254,14 +254,14 @@ export class GroupsService {
         await this.deleteCoverFile(foundGroup.cover);
       }
 
-      const memebersIds = response.members
+      const membersIds = response.members
         .map(({ userId }) => userId)
         .filter((id) => id !== userId);
       const user = response.members.find((member) => member.userId === userId);
 
       this.sse.emit(
-        memebersIds,
-        SseEventType.GROUP_UDPATED,
+        membersIds,
+        SseEventType.GROUP_UPDATED,
         `${user?.user.name} updated group "${response.name}"`,
       );
 

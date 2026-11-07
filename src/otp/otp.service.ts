@@ -1,7 +1,5 @@
-import * as crypto from 'crypto';
-
 import { Injectable, Logger } from '@nestjs/common';
-import { generateOtp } from 'src/auth/otp.util';
+import { generateOtp, hashOtp } from 'src/auth/otp.util';
 
 import { DatabaseService } from 'src/database/database.service';
 import { EmailService } from 'src/email/email.service';
@@ -85,7 +83,7 @@ export class OtpService {
     // for an email that has an account
     if (!count) return false;
 
-    const hashedInput = crypto.createHash('sha256').update(otp).digest('hex');
+    const hashedInput = hashOtp(otp);
 
     return this.prisma.$transaction(async (tx) => {
       // The code is used up here, so the same code sent twice only counts once

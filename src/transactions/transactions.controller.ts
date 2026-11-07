@@ -28,7 +28,7 @@ export class TransactionsController {
 
   @Get(':groupId')
   getTransactions(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { groupId }: GetTransactionParamsDto,
   ) {
     return this.transactionsService.findTransactions(userId, groupId);
@@ -36,7 +36,7 @@ export class TransactionsController {
 
   @Get('single/:id')
   getTransactionById(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { id }: GetTransactionByIdParamsDto,
   ) {
     return this.transactionsService.findTransactionById(userId, id);
@@ -44,7 +44,7 @@ export class TransactionsController {
 
   @Post()
   createTransaction(
-    @UserId() userId,
+    @UserId() userId: string,
     @Body() createTransactionDto: CreateTransactionDto,
   ) {
     return this.transactionsService.createTransaction(
@@ -61,7 +61,7 @@ export class TransactionsController {
 
   @Patch(':id')
   updateTransaction(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { id }: UpdateTransactionParamsDto,
     @Body() updateTransactionDto: UpdateTransactionDto,
   ) {
@@ -79,14 +79,14 @@ export class TransactionsController {
 
   @Delete(':id')
   deleteTransaction(
-    @UserId() userId,
+    @UserId() userId: string,
     @Param() { id }: DeleteTransactionParamsDto,
   ) {
     return this.transactionsService.deleteTransaction(userId, id);
   }
 
   @Post('/settle')
-  settleDebt(@UserId() userId, @Body() body: SettleDebtBodyDto) {
+  settleDebt(@UserId() userId: string, @Body() body: SettleDebtBodyDto) {
     return this.transactionsService.settle(userId, body);
   }
 }
