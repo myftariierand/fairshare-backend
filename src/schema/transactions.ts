@@ -3,7 +3,7 @@ import { createZodDto } from 'nestjs-zod';
 
 import { TransactionCategory } from '@prisma/client';
 
-import { text } from 'src/schema/common';
+import { AmountSchema, text } from 'src/schema/common';
 
 const DescriptionSchema = text(255, 4);
 
@@ -11,14 +11,14 @@ const CreateTransactionSchema = z.object({
   // Set by the client once per expense it means to add, so sending it again can't add a second one
   idempotencyKey: z.string().min(8).max(64).optional(),
   groupId: z.string().uuid(),
-  amount: z.number().positive(),
+  amount: AmountSchema,
   category: z.nativeEnum(TransactionCategory),
   description: DescriptionSchema,
   paidBy: z.string().uuid(),
   splits: z.array(
     z.object({
       userId: z.string().uuid(),
-      amount: z.number().positive(),
+      amount: AmountSchema,
     }),
   ),
 });
@@ -37,14 +37,14 @@ export class UpdateTransactionParamsDto extends createZodDto(
 
 const UpdateTransactionSchema = z.object({
   groupId: z.string().uuid(),
-  amount: z.number().positive(),
+  amount: AmountSchema,
   category: z.nativeEnum(TransactionCategory),
   description: DescriptionSchema,
   paidBy: z.string().uuid(),
   splits: z.array(
     z.object({
       userId: z.string().uuid(),
-      amount: z.number().positive(),
+      amount: AmountSchema,
     }),
   ),
 });
@@ -79,7 +79,7 @@ export class GetTransactionByIdParamsDto extends createZodDto(
 
 const SettleDebtBodySchema = z.object({
   groupId: z.string().uuid(),
-  amount: z.number().positive(),
+  amount: AmountSchema,
   description: DescriptionSchema,
   paidBy: z.string().uuid(),
 });

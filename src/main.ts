@@ -20,6 +20,7 @@ process.on('unhandledRejection', (reason) => {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Exact for anything a Decimal(10, 2) column holds, and what the clients already expect
   (Prisma.Decimal.prototype as any).toJSON = function () {
     return this.toNumber();
   };

@@ -14,7 +14,11 @@ import { PushService } from 'src/devices/push.service';
 
 import { SseEventType } from 'src/types/sse';
 
-import { toMinorUnit } from 'src/helpers/conversion-helpers';
+import {
+  balanceOf,
+  fitsCurrency,
+  toMinorUnit,
+} from 'src/helpers/conversion-helpers';
 import { TransactionCategory, TransactionType } from '@prisma/client';
 
 @Injectable()
@@ -46,16 +50,7 @@ export class TransactionsService {
         type,
         category,
       }) => {
-        const userSplit = splits.find((split) => split.userId === userId);
-
-        const balance =
-          paidById === userId
-            ? splits.reduce(
-                (sum, split) =>
-                  sum + (split.userId !== userId ? split.amount.toNumber() : 0),
-                0,
-              )
-            : -(userSplit?.amount.toNumber() ?? 0);
+        const balance = balanceOf(userId, paidById, splits);
 
         return {
           id,
@@ -141,6 +136,8 @@ export class TransactionsService {
           );
 
         this.assertNoDuplicateSplits(splits);
+
+        this.assertFitsCurrency(amount, splits, foundGroup.currency);
 
         const unitAmount = toMinorUnit(amount, foundGroup.currency);
         const splitsTotal = splits.reduce(
@@ -272,6 +269,8 @@ export class TransactionsService {
           );
 
         this.assertNoDuplicateSplits(splits);
+
+        this.assertFitsCurrency(amount, splits, foundGroup.currency);
 
         const unitAmount = toMinorUnit(amount, foundGroup.currency);
         const splitsTotal = splits.reduce(
@@ -422,6 +421,18 @@ export class TransactionsService {
       }
 
       throw error;
+    }
+  }
+
+  private assertFitsCurrency(
+    amount: number,
+    splits: { amount: number }[],
+    currency: string,
+  ) {
+    const amounts = [amount, ...splits.map((split) => split.amount)];
+
+    if (!amounts.every((value) => fitsCurrency(value, currency))) {
+      throw new BadRequestException(`${currency} amounts can't have decimals`);
     }
   }
 

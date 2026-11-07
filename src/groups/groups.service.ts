@@ -8,6 +8,7 @@ import {
 import { Prisma, Group } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
+import { balanceOf } from 'src/helpers/conversion-helpers';
 import { SseService } from 'src/sse/sse.service';
 import { DatabaseService } from 'src/database/database.service';
 import { ActivityLogsService } from 'src/activity-logs/activity.service';
@@ -79,18 +80,7 @@ export class GroupsService {
       const settlements = BalanceUtil.simplifyBalances(response.transactions);
 
       const transactions = response.transactions.map((t) => {
-        const userSplit = t.splits.find((split) => split.userId === userId);
-
-        const balance =
-          t.paidById === userId
-            ? t.splits.reduce(
-                (sum, split) =>
-                  sum + (split.userId !== userId ? split.amount.toNumber() : 0),
-                0,
-              )
-            : -(userSplit?.amount.toNumber() ?? 0);
-
-        return { ...t, balance };
+        return { ...t, balance: balanceOf(userId, t.paidById, t.splits) };
       });
 
       const transformedResponse = {
