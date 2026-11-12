@@ -38,12 +38,36 @@ CI runs all of this on every pull request and every push to `main`.
 
 Build with `npm run build` and start with `npm run start:prod`. Run `npx prisma migrate deploy` before starting a new version.
 
-- Set `NODE_ENV=production` to get JSON logs.
 - Point the platform's health check at `GET /health`, which returns 503 if the database can't be reached.
-- `NOTIFICATION_EMAIL` is optional. Without it, no sign-up or bug report notices are sent.
-- `SUPPORT_EMAIL` is optional. Without it, the account-deleted email has no contact line, which leaves someone who didn't delete their account with nowhere to go.
-- `DONATION_URL` is optional. Without it, the welcome email has no donation section. Keep donation links out of the mobile app, because the app stores have rules about asking for payments there.
 - Emails load their logo from `<CLIENT_ORIGIN>/email/logo-64.png`, which the web app serves.
+
+### Environment variables in production
+
+`.env.example` lists every variable, grouped the same way as below.
+
+The app won't start without these:
+
+| Variable | Production value |
+| --- | --- |
+| `DATABASE_URL` | The hosted database's connection string |
+| `NODE_ENV` | `production`, which switches to JSON logs |
+| `ACCESS_TOKEN_SECRET`, `RESET_PASSWORD_SECRET` | New secrets of at least 32 characters, never the local ones. Generate each with `openssl rand -hex 64`. |
+| `CLIENT_ORIGIN` | The deployed web app's URL. Allowed by CORS and used for links in emails. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | The Google OAuth client. `GOOGLE_CLIENT_ID` must match `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in the mobile app. |
+| `GOOGLE_CALLBACK_URL` | `<backend URL>/auth/google/callback`, also listed in the Google client's redirect URIs |
+| `RESEND_API_KEY` | A key for a verified sending domain |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | The Cloudinary account for image uploads |
+
+These are optional, and leaving one empty turns that part off:
+
+- `ADMIN_ORIGIN` is the admin dashboard's URL. Set it whenever the dashboard is deployed, or CORS blocks its requests.
+- `MOBILE_ORIGIN` adds the mobile app's origin to CORS.
+- `GOOGLE_WEB_CLIENT_ID` is only for a mobile app that uses a different Google client from the backend.
+- `NOTIFICATION_EMAIL` is where sign-up and bug report notices go. Without it, none are sent.
+- `SUPPORT_EMAIL` is the contact line in the account-deleted email. Without it, someone who didn't delete their account has nowhere to go.
+- `DONATION_URL` adds a donation section to the welcome email. Keep donation links out of the mobile app, because the app stores have rules about asking for payments there.
+
+`POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD` are only read by `docker-compose.yml` for the local database. `PORT` defaults to 3000, and hosts like Vercel set their own.
 
 ## Running one instance only
 
