@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { ZodValidationPipe } from 'nestjs-zod';
 
 import { PrismaExceptionFilter } from 'src/prisma-exception.filter';
 import { HealthController } from 'src/health.controller';
@@ -25,6 +24,7 @@ import { DevicesModule } from 'src/devices/devices.module';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { throttlerOptions } from 'src/throttling';
 import { validateEnv } from 'src/env.validation';
+import { RequestValidationPipe } from 'src/request-validation.pipe';
 
 @Module({
   imports: [
@@ -47,7 +47,7 @@ import { validateEnv } from 'src/env.validation';
   ],
   controllers: [HealthController],
   providers: [
-    { provide: APP_PIPE, useClass: ZodValidationPipe },
+    { provide: APP_PIPE, useClass: RequestValidationPipe },
     { provide: APP_GUARD, useClass: AuthGuard },
     // After AuthGuard, which sets the user id that logged-in requests are counted by
     { provide: APP_GUARD, useClass: ThrottlerGuard },
